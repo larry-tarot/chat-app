@@ -5,6 +5,7 @@ import {
   IconDataOutline16,
   IconDownloadOutline16,
   IconFollowsystemOutline16,
+  IconGlobeLanguageOutline14,
   IconLightOutline16,
   IconSettingsOutline16,
   IconUploadOutline14,
@@ -33,6 +34,7 @@ import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
+import { EndpointSettings } from './EndpointSettings.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import styles from './Settings.module.css'
 
@@ -50,6 +52,11 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     value: 'general',
     label: 'settingDialogAsideGeneralOptionLabel',
     icon: <IconSettingsOutline16 />,
+  },
+  {
+    value: 'provider',
+    label: 'settingDialogAsideProviderOptionLabel',
+    icon: <IconGlobeLanguageOutline14 />,
   },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
@@ -101,6 +108,8 @@ const SettingsContent = () => {
               <TtsVoiceSetting />
               <LocationSetting />
             </>
+          ) : section === 'provider' ? (
+            <EndpointSettings />
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />

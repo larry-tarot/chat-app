@@ -7,7 +7,12 @@ import {
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
-import { setSearch, setThinking, useSettings } from '../../services/settings.js'
+import {
+  setSearch,
+  setThinking,
+  useSettings,
+  isAnthropicProtocol,
+} from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
@@ -53,6 +58,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
+  // 附件、联网搜索、语音都是 Anthropic 兼容协议的扩展能力；OpenAI 兼容下入口置灰（不是等 404）
+  const anthropic = isAnthropicProtocol(useSettings((state) => state.endpoint.protocol))
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -75,7 +82,15 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }, [t])
 
   const acceptFiles = (files: File[]) => {
-    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
+    if (files.length === 0 || useChatStore.getState().importingHistory) {
+      return
+    }
+    // 拖拽/粘贴也走这里：OpenAI 兼容协议下明确拒绝，避免上传到半路 404
+    if (!anthropic) {
+      showToast({ key: 'protocolNoUpload' })
+      return
+    }
+    if (!ensureApiKey()) {
       return
     }
     const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
@@ -99,7 +114,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     },
     [sessionId]
   )
-  const dragging = useFileDrop(acceptFiles)
+  const dragging = useFileDrop(acceptFiles, anthropic)
 
   /** 转写结果插入到光标处，并把光标移到插入内容之后 */
   const voice = useVoiceInput((transcript) => {
@@ -214,12 +229,13 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
             </button>
           </Tooltip>
-          <Tooltip content={t('deactivatedSearchTooltip')}>
+          <Tooltip content={anthropic ? t('deactivatedSearchTooltip') : t('protocolNoSearch')}>
             <button
               type="button"
-              className={clsx(styles.toggle, search && styles.selected)}
+              className={clsx(styles.toggle, anthropic && search && styles.selected)}
               aria-label={t('search')}
-              aria-pressed={search}
+              aria-pressed={anthropic && search}
+              disabled={!anthropic}
               onClick={() => setSearch(!search)}
             >
               <IconGlobeLanguageOutline14 />
@@ -230,7 +246,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         <div className={styles.right}>
           <VoiceButton
             status={voice.status}
-            disabled={!voice.available}
+            disabled={!voice.available || !anthropic}
+            disabledLabel={anthropic ? undefined : t('protocolNoVoice')}
             seconds={voice.seconds}
             onClick={() => {
               if (
@@ -245,8 +262,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             size="m"
             tone="primary"
             icon={<IconPaperclipOutline16 />}
-            tooltip={t('uploadFile')}
-            disabled={importingHistory}
+            tooltip={anthropic ? t('uploadFile') : t('protocolNoUpload')}
+            disabled={importingHistory || !anthropic}
             onClick={() => ensureApiKey() && fileInputRef.current?.click()}
           />
           <input

@@ -34,17 +34,27 @@
 
 ## @小码 —— L2/L5（只碰 `src/components/settings/**` + `src/i18n/**` + `services/settings.ts`）
 
-**新增两条（架构裁决，见 ARCHITECTURE.md §7/§8）：**
-- [ ] 选 OpenAI 兼容协议时，把「上传文件」「语音输入」「智能搜索」三个入口**置灰** + tooltip「当前服务商不支持」——不要靠 404 兜底
-- [ ] 思考区默认折叠状态跟 `settings.thinking` 走（`defaultOpen = thinking`），**不要隐藏**：网关可能在关闭时仍下发推理内容，隐藏会让转录与上游不一致
+**状态：✅ 已完成（`pnpm type` 0 error / `pnpm lint` 0 warning / `pnpm build` 4.5MB / `node scripts/settings-provider.test.mjs` 全绿 / 浏览器真链路三段协议各发一条真消息）。**
 
-- [ ] `SettingsDialog` 新增「服务商」分区：协议下拉（Anthropic 兼容 / OpenAI 兼容）+ 端点地址输入框 + 「恢复默认」按钮
-- [ ] 保存时调 `setEndpointOverride()`；返回 `false`（非法地址）时原地报错、不落库
-- [ ] Key 校验复用 `verifyApiKey()`（它改完后会自动打到新端点，见 @coder 第一条）；**不要**自己写 fetch
-- [ ] `i18n/zh.ts` + `en.ts`：新增 6 条文案（协议、端点地址、端点占位、恢复默认、地址非法、网关 CORS 提示）
-- [ ] 网络错误分支文案：「连接失败——请确认网关已放行跨域（CORS）且地址可达」，这是本方案最大的坑
-- [ ] 设置键迁移：旧 key（`chat-demo:*`）保持不变，只**新增** `chat-demo:endpoint-*`；不做破坏性迁移
-- [ ] 验收：手点 ① 填 `gw.example.com` → 自动补 `https://` ② 切 OpenAI 协议刷新后仍生效 ③ 填 `ftp://x` 报错且旧值保留
+**新增两条（架构裁决，见 ARCHITECTURE.md §7/§8）：**
+- [x] 选 OpenAI 兼容协议时，把「上传文件」「语音输入」「智能搜索」三个入口**置灰** + tooltip「当前服务商不支持」——不要靠 404 兜底
+      - 入口：`ChatInput`（搜索 toggle 真 disabled、上传 IconButton disabled、`VoiceButton` 新增 `disabledLabel`）；`ReadAloudButton` 同时置灰（`/v1/tools/tts` 同样 404）
+      - 拖拽/粘贴也拦：`useFileDrop(onDrop, enabled)` 关闭时不注册监听，`acceptFiles` 再兜一层 toast；搜索开关置灰但**保留存值**，切回 Anthropic 自动恢复高亮
+- [x] 思考区默认折叠状态跟 `settings.thinking` 走（`defaultOpen = thinking`），**不要隐藏**：网关可能在关闭时仍下发推理内容，隐藏会让转录与上游不一致
+      - `ReplyArea`：`useState(() => useSettings.getState().thinking)`；标题判定从 `message.thinking ?? hasThinking` 改为 `=== true || hasThinking`，这样「请求关思考但网关仍下发」时也有可点的折叠标题，而不是无标题地平铺
+
+- [x] `SettingsDialog` 新增「服务商」分区：协议下拉（Anthropic 兼容 / OpenAI 兼容）+ 端点地址输入框 + 「恢复默认」按钮
+      - `settingsDialogState.ts` 的 `SettingsSection` 增加 `'provider'`；新文件 `EndpointSettings.tsx` + `useEndpointForm.ts`
+- [x] 保存时调 `setEndpointOverride()`；返回 `false`（非法地址）时原地报错、不落库
+      - UI 只调 `services/settings.ts::saveEndpoint()`，它内部判 `false` 且不写任何键；实测 `ftp://x` 报错、localStorage 旧值不变
+- [x] Key 校验复用 `verifyApiKey()`（它改完后会自动打到新端点，见 @coder 第一条）；**不要**自己写 fetch
+      - ⚠️ **新增第 3 处 L2→`services/api/*` 引用**（按 ARCHITECTURE §4 要求在此申报）：`components/settings/useEndpointForm.ts` 直接 import `verifyApiKey` / `ApiError` / `classifyApiError`。原因：TASKS 指定必须复用 `verifyApiKey`，而它是 async fetch，不能放进 `services/settings.ts`（settings → client → transport → i18n → settings 会成环）。同属**流外一次性调用**，与既有两处豁免同性质。
+- [x] `i18n/zh.ts` + `en.ts`：新增 21 条文案（协议、协议说明、端点地址、占位、说明、保存、恢复默认、地址非法、校验中、已保存、校验未通过、被拒、CORS 提示、四个「当前服务商不支持」）
+- [x] 网络错误分支文案：「连接失败——请确认网关已放行跨域（CORS）且地址可达」，这是本方案最大的坑
+- [x] 设置键迁移：旧 key（`chat-demo:*`）保持不变，只**新增** `chat-demo:endpoint-*`；不做破坏性迁移
+- [x] 验收：手点 ① 填 `gw.example.com` → 自动补 `https://` ② 切 OpenAI 协议刷新后仍生效 ③ 填 `ftp://x` 报错且旧值保留
+
+**一个需要 @架构师 / @coder 知情的实现决定**：地址合法但**校验失败时不回滚**——配置照常写入，状态行显示「已保存，但校验未通过：<原因>」。理由：真实工作流是「先把网关地址配好，再去放行 CORS」，回滚会让用户在网关没起来时无法配置。非法地址（`ftp://x`、空值）仍然不落库，符合原验收。若你要求「校验失败即回滚」，改 `useEndpointForm.ts` 一处即可。
 
 **边界**：不要动 `src/services/api/**`、不要动 `services/chat/**`。
 

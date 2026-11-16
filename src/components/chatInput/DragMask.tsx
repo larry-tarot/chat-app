@@ -8,12 +8,17 @@ const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files
 
 /**
  * 拖拽上传：页面任意位置拖入文件即显示全屏遮罩，松手后交给 onDrop。
+ * enabled 为 false 时不监听事件（OpenAI 兼容协议下附件不可用，连遮罩都不该出现）。
  */
-export const useFileDrop = (onDrop: (files: File[]) => void) => {
+export const useFileDrop = (onDrop: (files: File[]) => void, enabled = true) => {
   const [dragging, setDragging] = useState(false)
   const onDropRef = useRef(onDrop)
   onDropRef.current = onDrop
   useEffect(() => {
+    if (!enabled) {
+      setDragging(false)
+      return
+    }
     // dragenter / dragleave 会在子元素间反复触发，用计数判断是否真正离开页面
     let depth = 0
     const enter = (event: DragEvent) => {
@@ -52,7 +57,7 @@ export const useFileDrop = (onDrop: (files: File[]) => void) => {
       document.removeEventListener('dragover', over)
       document.removeEventListener('drop', drop)
     }
-  }, [])
+  }, [enabled])
   return dragging
 }
 

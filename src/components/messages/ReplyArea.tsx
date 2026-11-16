@@ -1,6 +1,7 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
 import { memo, useEffect, useState, type ReactNode } from 'react'
+import { useSettings } from '../../services/settings.js'
 import {
   IconBrowseOutline16,
   IconBrowseWarningOutline16,
@@ -65,14 +66,16 @@ export const ReplyArea = memo(function ReplyArea({
   hasResponse: boolean
 }) {
   useTranslate()
-  const [open, setOpen] = useState(true)
+  // 默认折叠状态跟「深度思考」开关走：关着就折起来，但内容仍在，点标题可展开
+  const [open, setOpen] = useState(() => useSettings.getState().thinking)
   const titleActive = streaming && !hasResponse
   useTicker(titleActive, 1000)
   if (view.steps.length === 0 && !(message.thinking && streaming)) {
     return null
   }
-  // 未记录请求开关时，按是否有思考内容显示标题。
-  const thinking = message.thinking ?? view.steps.some((step) => step.type === 'thinking')
+  // 未记录请求开关时，按是否有思考内容显示标题；
+  // 请求侧关了思考但网关仍下发推理内容时也有内容，用 `||` 而不是 `??` 才能给出可折叠的标题
+  const thinking = message.thinking === true || view.steps.some((step) => step.type === 'thinking')
   const title = thinking ? getAreaTitle(view, streaming, Date.now(), hasResponse) : null
   const stopped = !streaming && !hasResponse
   return (

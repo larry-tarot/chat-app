@@ -1,4 +1,12 @@
 import { create } from 'zustand'
+import {
+  clearEndpointOverride,
+  normalizeBaseUrl,
+  resolveEndpoint,
+  setEndpointOverride,
+  type EndpointConfig,
+  type Protocol,
+} from './api/endpoint.js'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 
@@ -7,7 +15,7 @@ export type Locale = 'zh-CN' | 'en-US'
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
+/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态、端点配置 */
 type Settings = {
   apiKey: string | null
   locale: Locale
@@ -17,6 +25,11 @@ type Settings = {
   thinking: boolean
   search: boolean
   siderCollapsed: boolean
+  /**
+   * 端点配置的 UI 镜像。请求侧仍以 `endpoint.ts` 的 `resolveEndpoint()` 为唯一真相：
+   * 这里只是让组件在协议/地址变化时重渲染（localStorage 不在 React 的依赖里）。
+   */
+  endpoint: EndpointConfig
 }
 
 const KEYS = {
@@ -96,6 +109,7 @@ export const useSettings = create<Settings>(() => ({
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
+  endpoint: resolveEndpoint(),
 }))
 
 export const setLocale = (locale: Locale) => {
@@ -137,4 +151,32 @@ export const setSearch = (search: boolean) => {
 export const setSiderCollapsed = (siderCollapsed: boolean) => {
   write(KEYS.siderCollapsed, String(siderCollapsed))
   useSettings.setState({ siderCollapsed })
+}
+
+/** 组件从这里拿协议类型，避免 L2 直接 import `services/api/*` */
+export type { EndpointConfig, Protocol } from './api/endpoint.js'
+
+/** OpenAI 兼容协议不具备 Anthropic 扩展能力（附件、语音、联网搜索、朗读） */
+export const isAnthropicProtocol = (protocol: Protocol): boolean =>
+  protocol === 'anthropic-messages'
+
+/** 输入框失焦/保存后回填规范化结果（补 https、去尾斜杠、丢 query）；非法返回 null */
+export const normalizeEndpointUrl = (value: string): string | null => normalizeBaseUrl(value)
+
+/**
+ * 保存端点覆盖。地址非法时返回 false 且**不写任何键**（旧配置原样保留）。
+ * 成功后同步 UI 镜像，设置面板改完立即对后续请求生效，无需刷新。
+ */
+export const saveEndpoint = (patch: { protocol?: Protocol; baseUrl?: string }): boolean => {
+  if (!setEndpointOverride(patch)) {
+    return false
+  }
+  useSettings.setState({ endpoint: resolveEndpoint() })
+  return true
+}
+
+/** 清掉两项覆盖，回到构建期默认端点 */
+export const resetEndpoint = () => {
+  clearEndpointOverride()
+  useSettings.setState({ endpoint: resolveEndpoint() })
 }
