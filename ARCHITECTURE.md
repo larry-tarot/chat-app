@@ -284,7 +284,7 @@ gw.example.com:abc / https://      → null                        正确拒绝
 
 | # | 问题 | 归属 | 改法 | 可执行验收 |
 |---|---|---|---|---|
-| ① | 端点地址带凭据（`https://user:token@host`）被静默丢弃 | L2 `useEndpointForm` | 保存前判 authority 含 `@`，就地拒绝并说明「网关鉴权请用 API Key」，不落库 | 保存后 `localStorage` 不得出现该键；提示文案命中 |
+| ① | **地址可能指向与肉眼不同的主机**（`https://***@evil.example.com` → 存成 `https://evil.example.com`，用户以为配的是 `gw`） | L2 `useEndpointForm`：**`commitBaseUrl()` + `save()` 两处** | 判定只看**原始草稿**的 authority 是否含 `@`；命中就报错、不改写、不规范化、不落库 | **必须从输入框草稿进：粘贴 `https://user:token@gw…` → 失焦 → 草稿原样保留且报错**；只测「粘贴 → 保存」会漏 |
 | ② | `network` 文案在全仓 3 个副本，同一原因两个结论 | **L5 规则 + L2/L3 各 1 行** | `services/settings.ts` 增加 `networkFailureKey()`，`describe.ts` / `apiFailure.ts` 只读键不判 source | `grep -rn networkFailureKey src/` 判定点 = 1；L2/L3 不再出现 `source === 'override'` |
 | ③ | 网关返回网页时，气泡把整段 HTML 当错误文案 | L4 `readErrorResponse` | 响应体是 HTML 或超长非 JSON → 抛「端点返回的是网页而不是 API 响应，多半地址少了路径，或被登录页/防火墙拦截」 | 探针脚本：两协议各返回 `200 text/html`，断言 `kind==='protocol'` 且 message 不含 `<` |
 | ④ | `file://` 下 `null` 源与 `github.io` 源的官方端点可用性 | —（已实测） | 无需改动 | OPTIONS 预检 `ACAO` 回显，见下 |
@@ -304,3 +304,29 @@ OPTIONS https://api.deepseek.com/anthropic/v1/messages
 2. 历史 commit 署名不改（见 §10.8）。
 
 **批次纪律**：一次改完 → `sh scripts/release.sh` 一次重出 → 三处期望值同改 → `grep -rn` 不得残留旧哈希 → 再跑一遍确认哈希稳定。
+
+### 11.1 ① 的实现纪律（两位在发布前把坑挖到了底，写死避免重犯）
+
+**实测（架构师复跑 `normalizeBaseUrl`，非手算）**：
+
+```
+"https://***@evil.example.com"          → "https://evil.example.com"   host=evil.example.com  ← 肉眼像 gw，实际去 evil
+"***@evil.example.com"（无协议）         → "https://evil.example.com"   同上
+"https://gw.example.com/path@v1"        → 原样保留                     路径里的 @ 合法，不该拦
+"https://gw.example.com/?mail=a@b.com"  → "https://gw.example.com"      query 被规范化丢弃（既有契约）
+```
+
+所以 ① 不是措辞问题，是**地址可能指向与肉眼不同的主机**，优先级排第一。
+
+**两个必须都改的位置**（`EndpointSettings.tsx:63` 已确认 `onBlur={form.commitBaseUrl}`）：
+
+1. `commitBaseUrl()`（失焦）——它为了显示规范化结果会改写草稿，**凭据在这一刻就被抹掉**，之后 `save()` 再也看不到原始串；
+2. `save()`——规范化之前判定，命中直接报错返回。
+
+只在 `save()` 里判＝**真实操作里永远命中不到的死代码**（用户几乎不可能在输入框保持焦点时点保存）；而且 `tsc` 与「测 `saveEndpoint`」的单测都不会报。
+
+**通用教训（比这条 bug 本身值钱）**：*任何会改写用户输入的步骤，都必须先确认这次改写是无损的。* `commitBaseUrl` 对「补 `https://`、去尾斜杠」是善意无损，对凭据是破坏性改写——它把证据抹掉，还让后面每一层都以为一切正常。
+
+**判定写法**：不依赖 `URL` 解析语义（骗过人的恰恰是解析语义），改用与解析无关的兜底——取 `scheme://` 之后、`[/?#]` 之前的那段（authority），含 `@` 即拒绝；`url.username || url.password` 作为第二道。两者都只判**原始草稿**。
+
+**契约层兜底：不做。** 让 `normalizeBaseUrl` 对凭据返回 `null` 会在「历史数据里已存了带凭据地址」时静默回落到默认端点，用户得到一个不一样的地址却没有任何解释。能说出「为什么」的那一层才该拦——这条口径三次评审都没变。
