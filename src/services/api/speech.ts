@@ -10,6 +10,26 @@ import { ApiError, request } from './client.js'
 /** 语音工具挂在 /v1/tools 下（不在 /anthropic/v1 前缀内）；基址跟随端点设置，不写死构建期常量 */
 const toolsBaseUrl = () => `${resolveEndpoint().baseUrl}/v1/tools`
 
+/**
+ * /v1/tools/* 只存在于 DeepSeek 官方端点；OpenAI 兼容网关基本直接 404 / 405。
+ * 这里把「接口不存在」翻译成 protocol 错误并给出可操作文案，而不是把裸 404 抛给界面：
+ * L2 已按协议置灰语音入口，但协议层不许指望上层一定拦住（见 ARCHITECTURE §7 裁决 2）。
+ */
+const toolsRequest = async (path: string, init: RequestInit): Promise<Response> => {
+  try {
+    return await request(`${toolsBaseUrl()}${path}`, init)
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 405)) {
+      throw new ApiError(
+        'protocol',
+        '当前服务商没有开放语音接口（/v1/tools），请切回 Anthropic 兼容协议后再试。',
+        error.status
+      )
+    }
+    throw error
+  }
+}
+
 export type TtsVoice = 'stella' | 'tide'
 
 /** TTS 输出的裸 PCM 参数：24kHz、单声道、16-bit 小端 */
@@ -23,7 +43,7 @@ export const transcribe = async (
 ): Promise<string> => {
   const form = new FormData()
   form.append('file', audio, 'recording.wav')
-  const response = await request(`${toolsBaseUrl()}/asr`, {
+  const response = await toolsRequest('/asr', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
     body: form,
@@ -54,7 +74,7 @@ export const synthesize = async (
   voice: TtsVoice,
   signal: AbortSignal
 ): Promise<ReadableStream<Uint8Array>> => {
-  const response = await request(`${toolsBaseUrl()}/tts`, {
+  const response = await toolsRequest('/tts', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, voice_id: voice, format: 'pcm', filter_markdown: true }),

@@ -63,7 +63,16 @@ const server = createServer((req, res) => {
     if (req.url === '/models' || req.url === '/v1/models') {
       return json(res, 200, { data: [] })
     }
-    if (req.url === '/v1/tools/tts') {
+    if (req.url.startsWith('/v1/tools/')) {
+      if (scenario === 'tools-404') {
+        return json(res, 404, { error: { message: 'Not Found', type: 'invalid_request_error' } })
+      }
+      if (scenario === 'tools-405') {
+        return json(res, 405, { error: { message: 'Method Not Allowed' } })
+      }
+      if (scenario === 'tools-500') {
+        return json(res, 500, { error: { message: '语音服务暂时不可用' } })
+      }
       res.writeHead(200, { 'content-type': 'application/octet-stream' })
       return res.end(Buffer.from([0, 0, 1, 0]))
     }
@@ -122,7 +131,7 @@ const baseUrl = `http://127.0.0.1:${server.address().port}`
 const { setEndpointOverride, resolveEndpoint } = await import('../src/services/api/endpoint.ts')
 const { streamMessage, verifyApiKey, ApiError } = await import('../src/services/api/client.ts')
 const { toOpenAiMessages, toOpenAiBody } = await import('../src/services/api/openai.ts')
-const { synthesize } = await import('../src/services/api/speech.ts')
+const { synthesize, transcribe } = await import('../src/services/api/speech.ts')
 const { applyEvent, getReplyText } = await import('../src/services/chat/reply.ts')
 const { buildReplyView } = await import('../src/services/chat/view.ts')
 
@@ -309,6 +318,46 @@ requests.length = 0
 const audio = await synthesize('test-key', '你好', 'stella', signal())
 ok('语音仍打 /v1/tools/tts（不叠第二层 /v1）', requests[0]?.url === '/v1/tools/tts', requests[0]?.url)
 ok('语音返回字节流', Boolean(audio))
+
+// 网关没有 /v1/tools：不能把裸 404 抛给界面（ARCHITECTURE §7 裁决 2）
+scenario = 'tools-404'
+const tts404 = await synthesize('test-key', '你好', 'stella', signal()).then(
+  () => null,
+  (error) => error
+)
+ok(
+  'TTS 404 → ApiError(protocol) 且文案说明是服务商不支持',
+  tts404 instanceof ApiError &&
+    tts404.kind === 'protocol' &&
+    tts404.status === 404 &&
+    tts404.message.includes('/v1/tools'),
+  String(tts404)
+)
+const asr404 = await transcribe('test-key', new Blob(['x'])).then(
+  () => null,
+  (error) => error
+)
+ok('ASR 404 同样映射（不是只改 TTS）', asr404 instanceof ApiError && asr404.kind === 'protocol', String(asr404))
+
+scenario = 'tools-405'
+const tts405 = await synthesize('test-key', '你好', 'stella', signal()).then(
+  () => null,
+  (error) => error
+)
+ok('405 也映射为 protocol（有的网关对不支持的方法回 405）', tts405 instanceof ApiError && tts405.kind === 'protocol' && tts405.status === 405, String(tts405))
+
+scenario = 'tools-500'
+const tts500 = await synthesize('test-key', '你好', 'stella', signal()).then(
+  () => null,
+  (error) => error
+)
+ok(
+  '500 保持 http 分类并透传服务端文案（不许被 404 映射污染）',
+  tts500 instanceof ApiError && tts500.kind === 'http' && tts500.message === '语音服务暂时不可用',
+  String(tts500)
+)
+
+scenario = 'normal'
 
 setEndpointOverride({ protocol: 'anthropic-messages' })
 requests.length = 0
