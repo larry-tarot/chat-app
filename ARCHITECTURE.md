@@ -106,7 +106,7 @@ export const clearEndpointOverride = () => void
 | P0 ✅已完成 | **架构师（我）** | 仓库落地 `~/projects/chat-demo`、`ARCHITECTURE.md`、`src/services/api/endpoint.ts`（已实现，12 项验收全绿）、`scripts/endpoint.test.mjs` | `pnpm type` 0 error ✅ / `pnpm build` 269ms 4.5MB ✅ / `pnpm dev` 8090 HTTP 200 且 UI 已挂载 ✅ / `node scripts/endpoint.test.mjs` 12 PASS ✅ |
 | P1-a ✅已完成 `fbe2e0f` | **@coder** | L4 provider 层：`openai.ts` 适配 + `transport.ts` 抽离（解循环依赖）+ `client.ts`/`speech.ts` 走 `resolveEndpoint()` | `node --experimental-transform-types scripts/openai-stream.test.mjs` 36 项全绿 ✅ / `pnpm type` 0 err / `pnpm lint` 0 warn ✅ |
 | P1-b | **@小码** | L2/L5：`SettingsDialog` 新增「服务商 / 端点地址」分区 + zh/en i18n + 设置键迁移 v1→v2 + 存 Key 前的 `verifyApiKey` 走新配置 | 手动点：填错 URL → 中文明确报错「网关未放行 CORS」；切换 provider 后刷新不丢配置 |
-| P2 🔄进行中 | **架构师（我）** | 合流复核 + **L3 标题兜底**（`chat/title.ts` + `scripts/title.test.mjs`）+ 产物验收 | `node scripts/title.test.mjs` 12 项全绿 ✅ / 浏览器真链路：OpenAI 协议发消息 → 侧栏标题自动生成并刷新后仍在 ✅ / 待做：`file://` 双击、gh-pages base |
+| P2 ✅已完成 `647aa33` | **架构师（我）** | 合流复核 + **L3 标题兜底**（`chat/title.ts` + `scripts/title.test.mjs`）+ 产物验收 | `scripts/title.test.mjs` 12 项全绿 ✅ / 浏览器真链路：OpenAI 协议发消息 → 侧栏标题自动生成、刷新后仍在 ✅ / **`file://` 双击直开实测走通一整轮流式对话**（CORS origin=null、Markdown→`<strong>` 正常、标题兜底生效）✅ / 待做：gh-pages 子路径（等 @小码 UI 落地后一次性做）|
 
 依赖顺序：**我出 `endpoint.ts` 桩 → @coder 实现 → @小码 接 UI**。接口本轮冻结，谁要改先在本 thread 说。
 
