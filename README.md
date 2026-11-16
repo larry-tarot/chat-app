@@ -4,6 +4,10 @@ English | [简体中文](README.zh-CN.md)
 
 A static chat demo powered by the DeepSeek API. No application backend is required: the browser connects directly to the configured API service.
 
+> This is a fork of [deepseek-ai/chat-demo](https://github.com/deepseek-ai/chat-demo) (MIT, Copyright © 2026 DeepSeek).
+> On top of upstream it makes the API endpoint a runtime setting, adds an OpenAI-compatible protocol, and completes
+> capability degradation and copy for multi-endpoint setups. Original license and copyright are in [LICENSE](LICENSE) — keep them when redistributing.
+
 You can [try the app online](https://deepseek-ai.github.io/chat-demo/) or download the archive from [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases), extract it, and double-click `index.html` to use it locally without installation or a build. Enter your API key in Settings before your first chat.
 
 ## Getting started

@@ -254,3 +254,24 @@ gw.example.com:abc / https://      → null                        正确拒绝
 **修复方案已定，留给 v0.5.1 第一个 commit**：L2 侧 `useEndpointForm` 在 `saveEndpoint` 前判 authority 是否含 `@`，命中就原地报「地址里不要带用户名/密码，网关鉴权请用 API Key」且不落库。**不动 `endpoint.ts`**——契约冻结期内不改，何况把它改成返回 `null` 会让「等等我配了一个带凭据的地址」变成一句无解释的「地址无效」。
 
 **文档层已先补**（README 中英各一行「暂不支持」），因为 README 不参与打包：改它不改变清单哈希，属于零成本的知情披露。
+
+### 10.8 发布出口：能力已就位，但两个按钮必须用户按
+
+**已确认的事实**（不是推测，`gh` 只读查询 + 本地仓库检查）：
+
+| 事实 | 结论 |
+|---|---|
+| `gh` 已登录 `larry-tarot`，scope 含 `repo`/`workflow` | 推送不需要额外配凭据 |
+| `larry-tarot/chat-app` 存在：private、size 0、`has_pages=false` | 空仓库，可直接推 |
+| **`.github/workflows/pages.yml` 早已存在**（继承自上游） | 不需要「加工作流」，需要「让它跑起来」 |
+| 六个 action 的 SHA pin（`git/ref/tags` + 注解标签解引用） | 全部与注释版本一致；`pnpm/action-setup@v6.1.1` 是 annotated tag，解引用后 = `73e46992…` |
+| 工作流触发条件 `push: branches: [main]` | **首推即触发**，而 Pages 未启用 → 必然红在 `configure-pages` |
+
+**因此顺序不可颠倒**：先启用 Pages（`POST /repos/{owner}/{repo}/pages -f build_type=workflow` 或 Settings → Pages → GitHub Actions），再 push。反过来做，你会白得一次红色的 X，且失败原因和代码毫无关系。
+
+**我没有替用户执行的两步，以及为什么**：
+
+1. **把仓库转 public** —— 账号级、对外可见、基本不可逆的动作，不是技术默认值，必须用户点头（免费账号的 Pages 只对 public 仓库开放）。
+2. **`git push` 到用户账号** —— 一次对外写入，同样需要授权。
+
+**合规项（本轮补）**：`LICENSE` 是 `Copyright (c) 2026 DeepSeek`，我们是 MIT fork。转为 public 后，README 开头必须声明 fork 关系并保留版权与许可证文本——两个 README 已补，且这是纯文档改动，`release.sh` 复跑确认清单哈希未变（`ec9782af`）。
