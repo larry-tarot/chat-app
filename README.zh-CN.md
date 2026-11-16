@@ -61,6 +61,34 @@ Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 
 3. **部分老网关不认 `stream_options`**。若网关以「未知字段」为由返回 400，本客户端会自动去掉 `include_usage` 重发一次。此时该轮**不显示 token 用量属于预期行为，不是故障**。
 
+## 构建产物与可复现性
+
+交付的离线包就是 `dist/` 的压缩结果，可以用一条命令重建并核对：
+
+```sh
+pnpm install && pnpm build
+sh scripts/release.sh        # 构建 + 打 zip + 打印清单哈希
+```
+
+当前源码基线的清单哈希为 `3aa530887ee43f7d29721d00e8e4b8db27b6d6e41497b5b886e7ce4180bfc47e`：
+**153 个文件 / 4,408,942 字节 / 89 个 js**。换台机器重建后哈希不一致，说明源码或依赖版本变了——别把旧包当新包发。
+
+## 部署
+
+静态托管只需要 `dist/` 里的内容。两种形态都实测过：
+
+- 独立域名或端口：站点根目录指向 `dist/`；
+- 子路径（如 `/my-org/chat-demo/`）：产物按脚本自身地址推导资源路径，直接可用。
+
+`deploy/nginx.conf` 可直接抄用，关键是两条缓存规则：
+
+| 路径 | 响应头 | 为什么 |
+|---|---|---|
+| `/index.html` | `no-cache` | 入口壳不带内容哈希，缓存了就会「旧壳 + 新 chunk」白屏 |
+| `/static/{js,css,media}/**` | `max-age=31536000, immutable` | 文件名带内容哈希，永不失效 |
+
+该配置在 nginx/1.31.8 上 `nginx -t` 通过，并实测：`/index.html` → `no-cache`、主包与 async chunk → `immutable`、gzip 生效、子路径下 async chunk 仍返回 200、整页可在 nginx 后正常对话。
+
 ## 功能
 
 - 多会话、自动标题、重命名与删除；编辑提问、重新生成和切换消息分支。

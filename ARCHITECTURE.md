@@ -185,3 +185,28 @@ L2/L5（@小码 `dc9ba60`）、L4（@coder `8962cd4`）、L3 兜底（@架构师
 | 静态站点（gh-pages/任意静态机） | `pnpm build` → `dist/` | 子路径 `/my-org/chat-demo/` 下 main + 3 个 async chunk 全 200 ✅ |
 | 离线包（双击即用） | `dist/` 打 zip | 解压后 `index.html` 发真消息走通 ✅ |
 | 源码开发 | `pnpm dev` | 8090 ✅ |
+
+### 10.4 交付可复现性（采纳 @coder 的审计，并做成命令）
+
+`release/*.zip` 不进版本库（二进制进 git 是另一个坑），改为**可重建**：`scripts/release.sh` 一条命令完成构建 → 打包 → 打印清单哈希。
+
+实测（从源码重建两次，并与既有 zip 逐文件比对）：
+
+```
+diff -r --brief <解压的 zip> dist   → 0 行差异
+文件数 153 / 4,408,942 字节 / 89 个 js
+清单哈希 3aa530887ee43f7d29721d00e8e4b8db27b6d6e41497b5b886e7ce4180bfc47e
+```
+
+哈希写进了 README：以后谁手里的包对不上这个数，就是「源码变了但包没重出」，发布事故从此可判定而不是靠记忆。
+
+### 10.5 部署：方案 3 的配置文件已实测，不是示例文本
+
+采纳「自己传 `dist/`」作为主路径（变量最少），并交付 `deploy/nginx.conf`。本机装了 nginx 1.31.8，`nginx -t` 通过，且两种形态都真跑过：
+
+| 形态 | 实测 |
+|---|---|
+| 站点根 = `dist/` | `/index.html` → `no-cache`；主包与 async chunk → `immutable`；`LICENSE` → 1 天；gzip 生效；整页对话正常（真 SSE） |
+| 子路径 `/my-org/chat-demo/` | 上述缓存头同样正确；async chunk 200；SPA 回退 200 返回入口 |
+
+配置里特意写了一条注释：**不要把 CORS 加到静态站上**——跨域发生在「浏览器 → API 网关」，在 nginx 上加头只会制造「我配过了」的错觉。

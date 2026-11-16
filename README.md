@@ -61,6 +61,20 @@ Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 
 3. **Older gateways may reject `stream_options`.** If a gateway answers 400 for that field, the client retries once without `include_usage`. **No token usage for that turn is expected, not a bug.**
 
+## Reproducible builds & deployment
+
+The offline archive is just `dist/` zipped. Rebuild and verify it with one command:
+
+```sh
+pnpm install && pnpm build
+sh scripts/release.sh        # build + zip + print the manifest hash
+```
+
+Current source baseline manifest hash: `3aa530887ee43f7d29721d00e8e4b8db27b6d6e41497b5b886e7ce4180bfc47e`
+(153 files / 4,408,942 bytes / 89 js). A different hash means source or dependency versions changed — do not ship an old archive as new.
+
+Static hosting only needs the contents of `dist/`; both a site root and a subpath (`/my-org/chat-demo/`) are verified. `deploy/nginx.conf` is a ready-to-copy config — the two rules that matter are `Cache-Control: no-cache` for `index.html` and `immutable` for the content-hashed `static/**`. Leaving `index.html` cached gives users an old shell with new chunks (blank page).
+
 ## Features
 
 - Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.
