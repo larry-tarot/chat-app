@@ -34,6 +34,7 @@ This fork makes the **API address a runtime setting** instead of a build-time co
 - Settings → Provider: pick a protocol (`Anthropic compatible` / `OpenAI compatible`) and enter the endpoint. A missing scheme gets `https://`, trailing slashes and query strings are normalized away. "Save" probes `/models` with the current key; a failed probe keeps the configuration and explains why (CORS not allowed / invalid key / gateway error).
 - The API key lives in Settings → **Data** (the Provider section has a "Configure now" shortcut).
 - "Reset" restores the build-time default (`https://api.deepseek.com`).
+- **Setting the endpoint before the key is fine**: the status line says "Saved. Connectivity is checked once an API Key is added." Without a key no request is made, so it never claims "connection OK". The real probe happens when you add the key — **expected, not an error**.
 
 | Capability | Anthropic compatible | OpenAI compatible |
 |---|---|---|
@@ -70,8 +71,8 @@ pnpm install && pnpm build
 sh scripts/release.sh        # build + zip + print the manifest hash
 ```
 
-Current source baseline manifest hash: `3aa530887ee43f7d29721d00e8e4b8db27b6d6e41497b5b886e7ce4180bfc47e`
-(153 files / 4,408,942 bytes / 89 js). A different hash means source or dependency versions changed — do not ship an old archive as new.
+Current source baseline manifest hash: `419032ecac2516ad8900cbc9234559be1027d053220ddb9cbed99751cfe01d63`
+(153 files / 4,409,126 bytes / 89 js). A different hash means source or dependency versions changed — do not ship an old archive as new.
 
 Static hosting only needs the contents of `dist/`; both a site root and a subpath (`/my-org/chat-demo/`) are verified. `deploy/nginx.conf` is a ready-to-copy config — the two rules that matter are `Cache-Control: no-cache` for `index.html` and `immutable` for the content-hashed `static/**`. Leaving `index.html` cached gives users an old shell with new chunks (blank page).
 
