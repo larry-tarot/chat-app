@@ -112,6 +112,20 @@ const server = createServer((req, res) => {
       res.write(frame({ id: 'c', choices: [{ index: 0, delta: {}, finish_reason: 'length' }] }))
       return res.end() // 有的网关不回 [DONE]，只有 finish_reason
     }
+    if (scenario === 'slow') {
+      // 慢速流：用于验证「停止生成」（AbortSignal）能立即掐断而不是挂住
+      sseOpen(res)
+      res.write(frame({ id: 'c', model: 'm', choices: [{ index: 0, delta: { content: '第一段' } }] }))
+      for (let i = 0; i < 30; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        if (res.writableEnded || res.destroyed) {
+          return
+        }
+        res.write(frame({ id: 'c', choices: [{ index: 0, delta: { content: `第${i + 2}段` } }] }))
+      }
+      res.write(frame('[DONE]'))
+      return res.end()
+    }
     if (scenario === 'split') {
       // 把整段 SSE 按 7 字节切片写出，切点会落在中文的 UTF-8 中间，验证解码器不炸
       sseOpen(res)
@@ -336,6 +350,36 @@ requests.length = 0
 const modelError = await collectUntilThrow(streamMessage('test-key', requestBody, signal()))
 ok('其它 400（模型名不存在）不重试，原样抛 http', modelError.error instanceof ApiError && modelError.error.kind === 'http' && modelError.error.status === 400, String(modelError.error))
 eq('其它 400 只发一次请求', requests.filter((entry) => entry.url === '/v1/chat/completions').length, 1)
+
+// ---------- 6.6 停止生成（AbortSignal） ----------
+scenario = 'slow'
+const abortController = new AbortController()
+const abortedEvents = []
+let abortError = null
+const abortStarted = Date.now()
+try {
+  for await (const event of streamMessage('test-key', requestBody, abortController.signal)) {
+    abortedEvents.push(event)
+    if (event.type === 'content_block_delta') {
+      abortController.abort()
+    }
+  }
+} catch (error) {
+  abortError = error
+}
+const abortElapsed = Date.now() - abortStarted
+ok('中止后循环立即结束（不会等网关把 30 段发完）', abortElapsed < 1000, `${abortElapsed}ms`)
+ok('中止信号已置位（store 的 aborted 优先分支据此判 stopped，不会判 error）', abortController.signal.aborted)
+ok('中止前收到的正文保留', abortedEvents.some((event) => event.type === 'content_block_delta'))
+eq('中止后不会补发 message_stop', abortedEvents.filter((event) => event.type === 'message_stop').length, 0)
+ok(
+  '中止只可能是 AbortError 或 interrupted（不会被当成协议/网络错误）',
+  abortError === null ||
+    abortError.name === 'AbortError' ||
+    (abortError instanceof ApiError && abortError.kind === 'interrupted'),
+  `${abortError?.name}: ${abortError?.message}`
+)
+console.log(`      （实测中止耗时 ${abortElapsed}ms，抛出 ${abortError?.name ?? 'null'}/${abortError?.kind ?? '-'}）`)
 
 // ---------- 7. 两种协议互不污染 ----------
 scenario = 'normal'
