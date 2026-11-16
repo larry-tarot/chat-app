@@ -109,7 +109,7 @@ const SettingsContent = () => {
               <LocationSetting />
             </>
           ) : section === 'provider' ? (
-            <EndpointSettings />
+            <EndpointSettings onConfigureApiKey={() => setSection('data')} />
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />

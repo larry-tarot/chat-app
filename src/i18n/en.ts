@@ -113,6 +113,8 @@ export const en = {
   settingsEndpointPlaceholder: 'https://api.deepseek.com',
   settingsEndpointDescription:
     'Your own gateway or relay address. https:// is added when the scheme is omitted.',
+  settingsEndpointApiKeyHint: 'The API Key is configured under Data management',
+  settingsEndpointApiKeyGo: 'Open',
   settingsEndpointSave: 'Save',
   settingsEndpointReset: 'Restore defaults',
   settingsEndpointInvalid: 'Invalid endpoint URL. Use an http(s):// address.',

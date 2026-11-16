@@ -9,7 +9,7 @@ import { useEndpointForm } from './useEndpointForm.js'
  * 服务商分区：协议 + 端点地址 + 恢复默认。
  * 只负责采集与展示；规范化、落库与校验在 `useEndpointForm` / `services/settings.ts` 里。
  */
-export const EndpointSettings = () => {
+export const EndpointSettings = ({ onConfigureApiKey }: { onConfigureApiKey: () => void }) => {
   const t = useTranslate()
   const form = useEndpointForm()
   const protocolOptions: { value: Protocol; label: string }[] = [
@@ -89,6 +89,13 @@ export const EndpointSettings = () => {
             </button>
           </div>
         </div>
+      </div>
+      {/* Key 不在这个分区：第一次配网关的人会去「通用设置」里翻（实测踩过），这里直接给入口 */}
+      <div className={styles.providerHint}>
+        <span>{t('settingsEndpointApiKeyHint')}</span>
+        <button type="button" className={styles.hintLink} onClick={onConfigureApiKey}>
+          {t('settingsEndpointApiKeyGo')}
+        </button>
       </div>
     </>
   )

@@ -52,6 +52,7 @@ export const VoiceButton = ({
           aria-label={label}
           aria-pressed={recording}
           aria-disabled={disabled}
+          disabled={disabled}
           onClick={() => {
             if (!disabled) {
               onClick()

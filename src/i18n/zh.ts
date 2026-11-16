@@ -107,6 +107,8 @@ export const zh = {
   settingsEndpoint: '端点地址',
   settingsEndpointPlaceholder: 'https://api.deepseek.com',
   settingsEndpointDescription: '自建网关或中转站地址；不写协议时自动补 https://。',
+  settingsEndpointApiKeyHint: 'API Key 在「数据管理」里配置',
+  settingsEndpointApiKeyGo: '前往配置',
   settingsEndpointSave: '保存',
   settingsEndpointReset: '恢复默认',
   settingsEndpointInvalid: '端点地址无效，请填写 http(s):// 开头的地址',
