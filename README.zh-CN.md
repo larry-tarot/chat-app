@@ -64,10 +64,16 @@ Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 
 `OPTIONS` 预检需返回 204。直接双击 `index.html` 打开时页面 origin 是 `null`，网关必须能接受它。
 
-2. **自定义端点请优先用 `https://`**。若用 `http://`，结果取决于浏览器与目标地址（Chrome 实测，控制台会打 `Mixed Content` 警告）：
-   - `http://localhost`、`http://127.0.0.1`、**内网地址（10./172.16-31./192.168. 等）**：请求**能发出**，可用；
-   - **公网 `http://`**：会被混合内容策略**拦截**，症状是「端点保存能过、发消息毫无反应」。
-   Safari/Firefox 未逐项实测，行为可能更严格，内网场景也建议做本机反向代理转成 https。
+2. **自定义端点请优先用 `https://`**。若用明文 `http://`，能否成功取决于浏览器版本与目标地址——这一块各家差异大且在变化，下面是我们实测 + 官方文档的当前口径：
+
+| 端点 | Chrome（157 实测） | 说明 |
+|---|---|---|
+| `http://localhost` / `http://127.0.0.1` | 可用 | loopback 豁免混合内容；**Safari 会直接拦**，Firefox 未测 |
+| `http://192.168.x.x` 等**私网 IP 字面量** | 可用 | Chrome 142+ 的 Local Network Access 豁免，但可能要求「本地网络访问」权限，拒绝即失败 |
+| `.local` 域名 | 多为失败 | 会被自动升级为 https 后失败（Chromium 已知问题 409972641） |
+| **公网 `http://`** | 失败 | 直接被混合内容策略拦截 |
+
+统一症状是**「设置里保存成功、发消息没反应」**——先看控制台有没有 `Mixed Content`，再看有没有被拦下的本地网络权限提示。内网网关仍建议在本机做反向代理转成 `https://`，这是唯一不依赖浏览器版本的做法。
 3. **协议对齐**。Anthropic 兼容端点需实现 `POST /anthropic/v1/messages`（SSE）、`GET /models`、`POST /anthropic/v1/files`；OpenAI 兼容端点需实现 `POST /v1/chat/completions`（`stream: true`）与 `GET /v1/models`。
 
 4. **部分老网关不认 `stream_options`**。若网关以「未知字段」为由返回 400，本客户端会自动去掉 `include_usage` 重发一次。此时该轮**不显示 token 用量属于预期行为，不是故障**。
