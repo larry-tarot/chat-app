@@ -6,13 +6,25 @@
 **契约已冻结**：`src/services/api/endpoint.ts`（架构师已实现，`node scripts/endpoint.test.mjs` 12 项全绿）。
 需要改动接口的场景，先在本 thread 说明，不要各自改。
 
+## 状态总览（架构师维护，2026-11-16 收尾）
+
+| 线 | commit | 状态 | 关键验收 |
+|---|---|---|---|
+| P0 仓库 + 契约 | `b92deea` | ✅ | endpoint.test 12 PASS / build 269ms |
+| L4 协议层 | `fbe2e0f` `8962cd4` | ✅ | openai-stream.test 36+ PASS / `/v1/tools` 404→protocol |
+| L2/L5 设置 UI | `dc9ba60` | ✅ | settings-provider.test PASS / DOM 置灰 + 刷新保持 |
+| L3 标题兜底 | `647aa33` | ✅ | title.test 12 PASS / 刷新后仍在 |
+| P2 产物验收 | 本文档 §9 | ✅ | file:// 全链路、子路径 200、UI 人点一遍 |
+
+**剩余全部是「已在 ARCHITECTURE §9 列明、但有意不做」的项**：CI、README 改写、UI 自动化回归。
+
 ---
 
 ## @coder —— L4 协议层（只碰 `src/services/api/**`）
 
 **状态：✅ 已完成并合入 `fbe2e0f`（36 项脚本验收 + 浏览器真链路）。以下仅留一条待办。**
 
-- [ ] `speech.ts`：`/v1/tools/*` 返回 404/405 时映射为 `ApiError('protocol')`「当前服务商不支持语音」，别让 404 原样冒到 UI（防御层，置灰是 @小码 的事，两层都要）
+- [x] `speech.ts`：`/v1/tools/*` 返回 404/405 → `ApiError('protocol')`「当前服务商不支持语音」（已完成 `8962cd4`，置灰 + 报错两层都在）
 
 - [x] `client.ts`：删除模块顶层的 `` `${API_ORIGIN}/anthropic/v1` `` 求值，改为每次请求调 `resolveEndpoint()` + `apiBase(cfg)`；`API_ORIGIN` 仅作为 `endpoint.ts` 的 fallback 来源保留
       - 附带：`ApiError` / `request` / `readErrorResponse` 抽到 `transport.ts`，`client.ts` 原样 re-export（避免 `client ⇄ openai` 循环 import）；外部 import 路径不用改

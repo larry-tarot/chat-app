@@ -106,7 +106,7 @@ export const clearEndpointOverride = () => void
 | P0 ✅已完成 | **架构师（我）** | 仓库落地 `~/projects/chat-demo`、`ARCHITECTURE.md`、`src/services/api/endpoint.ts`（已实现，12 项验收全绿）、`scripts/endpoint.test.mjs` | `pnpm type` 0 error ✅ / `pnpm build` 269ms 4.5MB ✅ / `pnpm dev` 8090 HTTP 200 且 UI 已挂载 ✅ / `node scripts/endpoint.test.mjs` 12 PASS ✅ |
 | P1-a ✅已完成 `fbe2e0f` | **@coder** | L4 provider 层：`openai.ts` 适配 + `transport.ts` 抽离（解循环依赖）+ `client.ts`/`speech.ts` 走 `resolveEndpoint()` | `node --experimental-transform-types scripts/openai-stream.test.mjs` 36 项全绿 ✅ / `pnpm type` 0 err / `pnpm lint` 0 warn ✅ |
 | P1-b | **@小码** | L2/L5：`SettingsDialog` 新增「服务商 / 端点地址」分区 + zh/en i18n + 设置键迁移 v1→v2 + 存 Key 前的 `verifyApiKey` 走新配置 | 手动点：填错 URL → 中文明确报错「网关未放行 CORS」；切换 provider 后刷新不丢配置 |
-| P2 ✅已完成 `647aa33` | **架构师（我）** | 合流复核 + **L3 标题兜底**（`chat/title.ts` + `scripts/title.test.mjs`）+ 产物验收 | `scripts/title.test.mjs` 12 项全绿 ✅ / 浏览器真链路：OpenAI 协议发消息 → 侧栏标题自动生成、刷新后仍在 ✅ / **`file://` 双击直开实测走通一整轮流式对话**（CORS origin=null、Markdown→`<strong>` 正常、标题兜底生效）✅ / 待做：gh-pages 子路径（等 @小码 UI 落地后一次性做）|
+| P2 ✅已完成 | **架构师（我）** | 合流复核 + **L3 标题兜底**（`chat/title.ts` + `scripts/title.test.mjs`）+ 产物验收（`file://`、子路径、UI 全链路）| `scripts/title.test.mjs` 12 项全绿 ✅ / 浏览器真链路：OpenAI 协议发消息 → 侧栏标题自动生成、刷新后仍在 ✅ / **`file://` 双击直开实测走通一整轮流式对话**（CORS origin=null、Markdown→`<strong>` 正常、标题兜底生效）✅ / 待做：gh-pages 子路径（等 @小码 UI 落地后一次性做）|
 
 依赖顺序：**我出 `endpoint.ts` 桩 → @coder 实现 → @小码 接 UI**。接口本轮冻结，谁要改先在本 thread 说。
 
@@ -138,3 +138,22 @@ export const clearEndpointOverride = () => void
 1. **标题兜底归 L3，不归 L4**：L4 不知道「会话」存在，接受。实现：`src/services/chat/title.ts` 纯函数 + `store.ts` 在 `finally` 里 `applyFallbackTitle`，只在 `status ∈ {done, stopped}`、标题为空、非导入中时写入。实测：OpenAI 协议发一条 → 侧栏立刻出现「帮我验一下切换到兼容协议后会话标题还会不会一直是…」，刷新后仍在（已落 IndexedDB）。
 2. **语音/上传/搜索在 OpenAI 协议下置灰（L2），不是弹 404**：L4 已把上传改成明确的 `protocol` 报错，语音仍需 L4 把 404 映射为可读错误作为**防御层**。两层都要，别互相依赖。
 3. **thinking 开关只控「请求」，不控「显示」**：网关收到 disabled 仍可能下发推理内容，L4 照常产出（数据不丢）。L2 的唯一动作是**默认折叠**（`defaultOpen = settings.thinking`），不是隐藏——隐藏会让转录与上游不一致。
+
+## 9. 验收记录（全部为实跑，命令可复现）
+
+L2/L5（@小码 `dc9ba60`）、L4（@coder `8962cd4`）、L3 兜底（@架构师 `647aa33`）合流后，我在同一台机器上跑完下列检查：
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| 类型 / 静态检查 | `pnpm type` / `pnpm lint` | 0 error / 0 warning（124 files） |
+| 产物 | `pnpm build` | 303ms / 4.5MB / 89 js（1 main + 88 async） |
+| 四份脚本验收 | `node --experimental-transform-types scripts/{endpoint,openai-stream,settings-provider,title}.test.mjs` | 4/4 PASS |
+| UI 全链路（人点） | 设置→服务商→选 OpenAI→填 `http://localhost:8799/`→保存 | 显示「已保存，连接正常」，存储落 `http://localhost:8799`（尾斜杠被规范化去掉） |
+| 请求真的换了地址 | stub 网关 `GET /__log` | `GET /v1/models`（校验）+ `POST /v1/chat/completions`（256B） |
+| 能力置灰 | DOM 检查 | 附件/语音/搜索 `disabled=true`，tooltip「当前服务商不支持…」 |
+| 思考区折叠 | DOM 检查 | 只显示「已思考（用时 1 秒）」，推理正文默认不展开（开关关闭时） |
+| 标题兜底 | 刷新后侧栏 | 「从 UI 走一遍完整链路：设置里配好网关后能不能…」，刷新后仍在 |
+| `file://` 双击 | 打开 `dist/index.html` 发真消息 | SSE 流式通、`<strong>` 渲染通、标题兜底通（origin=null 被网关放行） |
+| gh-pages 子路径 | 把 `dist/` 放进 `/my-org/chat-demo/` 静态服务 | main + `async/535`、`async/3806`、`async/4959`（含 css）全 200，UI 正常挂载 |
+
+**仍未做（有意为之，不属于本轮）**：CI 流水线、README 面向使用者的改写、UI 交互的自动化回归（目前 UI 层靠人点 + 纯函数脚本）。
