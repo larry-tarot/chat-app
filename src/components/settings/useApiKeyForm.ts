@@ -3,6 +3,7 @@ import { ApiError, verifyApiKey } from '../../services/api/client.js'
 import { classifyApiError } from '../../services/api/errors.js'
 import { setApiKey } from '../../services/settings.js'
 import { useTranslate } from '../../i18n/index.js'
+import { networkFailureText } from './apiFailure.js'
 
 /** 输入 API Key 后先用 GET /models 校验，通过才保存 */
 export const useApiKeyForm = (onSaved?: () => void) => {
@@ -17,7 +18,7 @@ export const useApiKeyForm = (onSaved?: () => void) => {
       : classifyApiError(cause) === 'unauthorized'
         ? t('apiKeyInvalid')
         : classifyApiError(cause) === 'network'
-          ? t('commonNetworkErrorToast')
+          ? networkFailureText(t)
           : t('apiKeyVerificationFailed', {
               message:
                 cause instanceof ApiError && cause.localMessage

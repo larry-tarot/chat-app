@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ApiError, verifyApiKey } from '../../services/api/client.js'
 import { classifyApiError } from '../../services/api/errors.js'
 import { useTranslate } from '../../i18n/index.js'
+import { networkFailureText } from './apiFailure.js'
 import {
   normalizeEndpointUrl,
   resetEndpoint,
@@ -25,14 +26,15 @@ export const useEndpointForm = () => {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<Status>(null)
 
-  /** 校验失败的可读原因：401 / 网络（CORS）单独给文案，其余透传服务端消息 */
+  /** 校验失败的可读原因：401 与网络（CORS）各给文案，其余透传服务端消息 */
   const describeFailure = (error: unknown): string => {
     const condition = classifyApiError(error)
     if (condition === 'unauthorized') {
       return t('settingsEndpointRejected')
     }
     if (condition === 'network') {
-      return t('settingsEndpointUnreachable')
+      // 与 API Key 表单共用同一句，避免同一失败两种说法
+      return networkFailureText(t)
     }
     if (error instanceof ApiError && error.localMessage) {
       return t(error.localMessage.key, error.localMessage.params)
