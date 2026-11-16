@@ -10,6 +10,10 @@
 
 ## @coder —— L4 协议层（只碰 `src/services/api/**`）
 
+**状态：✅ 已完成并合入 `fbe2e0f`（36 项脚本验收 + 浏览器真链路）。以下仅留一条待办。**
+
+- [ ] `speech.ts`：`/v1/tools/*` 返回 404/405 时映射为 `ApiError('protocol')`「当前服务商不支持语音」，别让 404 原样冒到 UI（防御层，置灰是 @小码 的事，两层都要）
+
 - [x] `client.ts`：删除模块顶层的 `` `${API_ORIGIN}/anthropic/v1` `` 求值，改为每次请求调 `resolveEndpoint()` + `apiBase(cfg)`；`API_ORIGIN` 仅作为 `endpoint.ts` 的 fallback 来源保留
       - 附带：`ApiError` / `request` / `readErrorResponse` 抽到 `transport.ts`，`client.ts` 原样 re-export（避免 `client ⇄ openai` 循环 import）；外部 import 路径不用改
 - [x] `speech.ts`：`${API_ORIGIN}/v1/tools` 同样走 `resolveEndpoint()`（**注意它已经是 `/v1` 前缀，不要叠成 `/v1/v1`**）
@@ -30,6 +34,10 @@
 
 ## @小码 —— L2/L5（只碰 `src/components/settings/**` + `src/i18n/**` + `services/settings.ts`）
 
+**新增两条（架构裁决，见 ARCHITECTURE.md §7/§8）：**
+- [ ] 选 OpenAI 兼容协议时，把「上传文件」「语音输入」「智能搜索」三个入口**置灰** + tooltip「当前服务商不支持」——不要靠 404 兜底
+- [ ] 思考区默认折叠状态跟 `settings.thinking` 走（`defaultOpen = thinking`），**不要隐藏**：网关可能在关闭时仍下发推理内容，隐藏会让转录与上游不一致
+
 - [ ] `SettingsDialog` 新增「服务商」分区：协议下拉（Anthropic 兼容 / OpenAI 兼容）+ 端点地址输入框 + 「恢复默认」按钮
 - [ ] 保存时调 `setEndpointOverride()`；返回 `false`（非法地址）时原地报错、不落库
 - [ ] Key 校验复用 `verifyApiKey()`（它改完后会自动打到新端点，见 @coder 第一条）；**不要**自己写 fetch
@@ -42,7 +50,8 @@
 
 ## 架构师（我）—— P2 合流与产物验收
 
-- [ ] 复核两个 PR：协议边界（L2 无 `services/api` 直接引用）、`view.ts` 对缺扩展块的容忍
+- [x] 复核两个 PR：协议边界（L2 无 `services/api` 直接引用）、`view.ts` 对缺扩展块的容忍
+- [x] **L3 标题兜底**：`src/services/chat/title.ts` + `store.ts::applyFallbackTitle`，验收 `node scripts/title.test.mjs`（12 项）
 - [ ] 产物验收：`file://` 双击可用、gh-pages 子路径、bundle ≤5MB、88 个 async chunk 不回归
 - [ ] 把 `endpoint.ts` 的 `apiBase` 与实际请求 URL 做一次对照表（防止各家网关前缀差异）
 

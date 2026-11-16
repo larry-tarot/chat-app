@@ -15,6 +15,7 @@ import {
   prepareDraftMessage,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
+import { deriveFallbackTitle } from './title.js'
 import {
   applyEvent,
   canContinueReply,
@@ -955,6 +956,26 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
   })
 
 /**
+ * 服务端没有下发标题时（OpenAI 兼容协议没有 delta.title）用首条用户消息兜底，
+ * 否则切换协议后侧栏永远停在「新对话」。用户手动重命名过的标题不覆盖。
+ */
+const applyFallbackTitle = (sessionId: string, reply: AssistantMessage) => {
+  if (reply.status !== 'done' && reply.status !== 'stopped') {
+    return
+  }
+  if (get().importingHistory) {
+    return
+  }
+  updateSession(sessionId, (session) => {
+    if (session.title) {
+      return session
+    }
+    const title = deriveFallbackTitle(session)
+    return title ? { ...session, title } : session
+  })
+}
+
+/**
  * 请求并消费流：先补齐附件的 serverId，再发请求；流式增量按动画帧刷新内存，完成、失败或停止后落盘。
  * 补传失败时回复记为 upload 错误，可重试。
  * 服务端判定 file_id 失效时重新补传后重发，退避重试且次数有上限，超过则按原始报错收尾。
@@ -1084,6 +1105,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
     updateReply(sessionId, reply)
+    applyFallbackTitle(sessionId, reply)
     set((state) => ({
       streaming: Object.fromEntries(
         Object.entries(state.streaming).filter(([id]) => id !== sessionId)
