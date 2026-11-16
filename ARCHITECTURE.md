@@ -330,3 +330,32 @@ OPTIONS https://api.deepseek.com/anthropic/v1/messages
 **判定写法**：不依赖 `URL` 解析语义（骗过人的恰恰是解析语义），改用与解析无关的兜底——取 `scheme://` 之后、`[/?#]` 之前的那段（authority），含 `@` 即拒绝；`url.username || url.password` 作为第二道。两者都只判**原始草稿**。
 
 **契约层兜底：不做。** 让 `normalizeBaseUrl` 对凭据返回 `null` 会在「历史数据里已存了带凭据地址」时静默回落到默认端点，用户得到一个不一样的地址却没有任何解释。能说出「为什么」的那一层才该拦——这条口径三次评审都没变。
+
+## 12. 发布记录（v0.5 已上线）
+
+**站点**：https://larry-tarot.github.io/chat-app/ ｜ **仓库**：https://github.com/larry-tarot/chat-app （PUBLIC）
+**发布提交**：`25ba6cd` ｜ **Pages**：`build_type=workflow`、`https_enforced=true` ｜ **CI**：一次运行，success
+
+### 12.1 架构师独立复核（不采信汇报，逐条自己跑）
+
+```
+可见性      gh repo view → visibility=PUBLIC / isPrivate=false
+Pages       gh api repos/.../pages → html_url=https://larry-tarot.github.io/chat-app/ · build_type=workflow
+CI          gh run list → success @ 25ba6cd（唯一一次运行）
+本地/远端   git rev-parse HEAD == ls-remote origin main == 25ba6cd · 工作树干净
+线上字节    index.html / main.dc71f29f.js / async/1031.575fa503.js
+            线上 sha256 与本地 dist 三者逐一相同
+浏览器      https 真 URL：挂载正常、子路径 6 个静态资源全 200（含 async css/js）
+仓库卫生    远端无 dist/、无 release/ 误提交
+```
+
+### 12.2 跑线上时才暴露的两条事实（已进 README）
+
+1. **GitHub Pages 固定 `cache-control: max-age=600`**，不可自定义。因此 `deploy/nginx.conf` 里那两条精心设计的缓存策略**在 Pages 上不生效**——不是配错，是平台限制。含义：入口壳最长 10 分钟旧（安全侧可接受），带哈希的 chunk 也不会被长期缓存（性能侧损失，但 Pages 免费）。
+2. **混合内容**：https 页面里只有 `http://localhost` / `127.0.0.1` 能直连，其余 `http://` 自定义端点会被拦。症状极具误导性——**端点保存能过、发消息毫无反应**，控制台才有 `Mixed Content`。已写进 README「接自建网关前必须确认」。
+
+### 12.3 唯一仍未验证的一项（需要用户手上的东西）
+
+**真实 API Key + 官方端点的完整对话**。预检（CORS 回显任意源，含 `null`）已实测，但 `200 + 真回答` 这一段必须有 Key 才能跑。这不是可以代理完成的验证——留作用户上线后的第一次真实验收。
+
+v0.5.1 三项（`§11`）不受发布影响，按原批次推进：一次改完 → 一次重出 → 三处哈希同改 → 复跑。

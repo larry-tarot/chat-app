@@ -64,9 +64,10 @@ Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 
 `OPTIONS` 预检需返回 204。直接双击 `index.html` 打开时页面 origin 是 `null`，网关必须能接受它。
 
-2. **协议对齐**。Anthropic 兼容端点需实现 `POST /anthropic/v1/messages`（SSE）、`GET /models`、`POST /anthropic/v1/files`；OpenAI 兼容端点需实现 `POST /v1/chat/completions`（`stream: true`）与 `GET /v1/models`。
+2. **自定义端点必须是 `https://`**。https 页面里只有 `http://localhost` 与 `http://127.0.0.1` 会被浏览器放行，其余 `http://` 地址会被**混合内容**拦截——症状很容易误判：端点保存能过、发消息却毫无反应（控制台里是 `Mixed Content` 报错）。
+3. **协议对齐**。Anthropic 兼容端点需实现 `POST /anthropic/v1/messages`（SSE）、`GET /models`、`POST /anthropic/v1/files`；OpenAI 兼容端点需实现 `POST /v1/chat/completions`（`stream: true`）与 `GET /v1/models`。
 
-3. **部分老网关不认 `stream_options`**。若网关以「未知字段」为由返回 400，本客户端会自动去掉 `include_usage` 重发一次。此时该轮**不显示 token 用量属于预期行为，不是故障**。
+4. **部分老网关不认 `stream_options`**。若网关以「未知字段」为由返回 400，本客户端会自动去掉 `include_usage` 重发一次。此时该轮**不显示 token 用量属于预期行为，不是故障**。
 
 ## 构建产物与可复现性
 
@@ -93,6 +94,8 @@ sh scripts/release.sh        # 构建 + 打 zip + 打印清单哈希
 |---|---|---|
 | `/index.html` | `no-cache` | 入口壳不带内容哈希，缓存了就会「旧壳 + 新 chunk」白屏 |
 | `/static/{js,css,media}/**` | `max-age=31536000, immutable` | 文件名带内容哈希，永不失效 |
+
+**GitHub Pages 不同**：它固定下发 `cache-control: max-age=600`，且不能自定义。所以 `index.html` 最长 10 分钟旧、带哈希的 chunk 也不会被长期缓存——这是 Pages 的限制，不是配置写错了，别去改 `deploy/nginx.conf` 试图修它。
 
 该配置在 nginx/1.31.8 上 `nginx -t` 通过，并实测：`/index.html` → `no-cache`、主包与 async chunk → `immutable`、gzip 生效、子路径下 async chunk 仍返回 200、整页可在 nginx 后正常对话。
 

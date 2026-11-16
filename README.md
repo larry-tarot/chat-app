@@ -64,9 +64,10 @@ Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 
 `OPTIONS` preflight must return 204. Opening `index.html` from disk sends `origin: null`, which the gateway must accept.
 
-2. **Match the protocol.** Anthropic compatible endpoints need `POST /anthropic/v1/messages` (SSE), `GET /models`, `POST /anthropic/v1/files`; OpenAI compatible endpoints need `POST /v1/chat/completions` (`stream: true`) and `GET /v1/models`.
+2. **A custom endpoint must be `https://`.** In an https page only `http://localhost` and `http://127.0.0.1` are allowed; any other `http://` address is blocked as **mixed content** — and the symptom is easy to misread: the endpoint saves fine but sending does nothing (look for `Mixed Content` in the console).
+3. **Match the protocol.** Anthropic compatible endpoints need `POST /anthropic/v1/messages` (SSE), `GET /models`, `POST /anthropic/v1/files`; OpenAI compatible endpoints need `POST /v1/chat/completions` (`stream: true`) and `GET /v1/models`.
 
-3. **Older gateways may reject `stream_options`.** If a gateway answers 400 for that field, the client retries once without `include_usage`. **No token usage for that turn is expected, not a bug.**
+4. **Older gateways may reject `stream_options`.** If a gateway answers 400 for that field, the client retries once without `include_usage`. **No token usage for that turn is expected, not a bug.**
 
 ## Reproducible builds & deployment
 
@@ -80,7 +81,9 @@ sh scripts/release.sh        # build + zip + print the manifest hash
 Current source baseline manifest hash: `ec9782af38e284d6fc9260735fb3e63c2b069d060f50a0ed3e3b2362aaa3f3a1`
 (153 files / 4,409,186 bytes / 89 js). A different hash means source or dependency versions changed — do not ship an old archive as new.
 
-Static hosting only needs the contents of `dist/`; both a site root and a subpath (`/my-org/chat-demo/`) are verified. `deploy/nginx.conf` is a ready-to-copy config — the two rules that matter are `Cache-Control: no-cache` for `index.html` and `immutable` for the content-hashed `static/**`. Leaving `index.html` cached gives users an old shell with new chunks (blank page).
+Static hosting only needs the contents of `dist/`; both a site root and a subpath (`/my-org/chat-demo/`) are verified. **GitHub Pages behaves differently**: it always sends `cache-control: max-age=600` and you cannot override it, so `index.html` can be up to 10 minutes stale and hashed chunks are not cached long-term. That is a Pages limitation, not a misconfiguration — do not try to fix it via `deploy/nginx.conf`.
+
+`deploy/nginx.conf` is a ready-to-copy config — the two rules that matter are `Cache-Control: no-cache` for `index.html` and `immutable` for the content-hashed `static/**`. Leaving `index.html` cached gives users an old shell with new chunks (blank page).
 
 ## Features
 
