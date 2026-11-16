@@ -10,15 +10,21 @@
 
 ## @coder —— L4 协议层（只碰 `src/services/api/**`）
 
-- [ ] `client.ts`：删除模块顶层的 `` `${API_ORIGIN}/anthropic/v1` `` 求值，改为每次请求调 `resolveEndpoint()` + `apiBase(cfg)`；`API_ORIGIN` 仅作为 `endpoint.ts` 的 fallback 来源保留
-- [ ] `speech.ts`：`${API_ORIGIN}/v1/tools` 同样走 `resolveEndpoint()`（**注意它已经是 `/v1` 前缀，不要叠成 `/v1/v1`**）
-- [ ] 新增 `openai.ts`：`POST {base}/v1/chat/completions`（`stream:true`）→ 解析 `data:` 帧 → 映射为既有 `MessageStreamEvent`
+- [x] `client.ts`：删除模块顶层的 `` `${API_ORIGIN}/anthropic/v1` `` 求值，改为每次请求调 `resolveEndpoint()` + `apiBase(cfg)`；`API_ORIGIN` 仅作为 `endpoint.ts` 的 fallback 来源保留
+      - 附带：`ApiError` / `request` / `readErrorResponse` 抽到 `transport.ts`，`client.ts` 原样 re-export（避免 `client ⇄ openai` 循环 import）；外部 import 路径不用改
+- [x] `speech.ts`：`${API_ORIGIN}/v1/tools` 同样走 `resolveEndpoint()`（**注意它已经是 `/v1` 前缀，不要叠成 `/v1/v1`**）
+- [x] 新增 `openai.ts`：`POST {base}/v1/chat/completions`（`stream:true`）→ 解析 `data:` 帧 → 映射为既有 `MessageStreamEvent`
       - `choices[0].delta.content` → `TextPart` 增量
-      - `delta.reasoning_content`（DeepSeek-R1 风格）→ `ThinkingPart` 增量
-      - `data: [DONE]` → `message_stop`；`finish_reason` → `stopReason`
-- [ ] `streamMessage()` 按 `cfg.protocol` 分派；**签名与返回的 AsyncIterable 保持不变**（否则 `store.ts` 要跟着改）
-- [ ] 401 / 网络失败 → 复用 `ApiError` 五分类，不许抛裸 `Error`
-- [ ] 验收：`scripts/openai-adapter.test.mjs` 用本地 SSE 帧回放（`node:http` 起临时 server，不引入测试框架），断言 3 帧文本增量 + 1 帧 thinking + DONE 收敛为 1 条完整 `AssistantMessage`
+      - `delta.reasoning_content`（DeepSeek-R1 风格）→ `ThinkingPart` 增量（另兼容 `delta.reasoning` 别名）
+      - `data: [DONE]` → `message_stop`；`finish_reason` → `stopReason`（stop/length/tool_calls/content_filter 全映射）
+      - 块边界合成：thinking 块 index=0、text 块 index=1，切换时补 `content_block_stop`，与 Anthropic 事件流同构
+      - usage：OpenAI 的 usage 常在 `finish_reason` **之后**的独立 chunk 里，收到 `[DONE]` 才收尾，否则丢 token 统计
+- [x] `streamMessage()` 按 `cfg.protocol` 分派；**签名与返回的 AsyncIterable 保持不变**（否则 `store.ts` 要跟着改）
+- [x] 401 / 网络失败 → 复用 `ApiError` 五分类，不许抛裸 `Error`（`transport.ts` 统一出口）
+- [x] 验收：`scripts/openai-stream.test.mjs` 用本地 SSE 帧回放（`node:http` 起临时 server，不引入测试框架），**36 项全绿**
+      - 覆盖：请求体转换、帧→事件骨架、usage 后置 chunk、7 字节切片（切点落在中文 UTF-8 中间）、`error` 帧、200 非 SSE、无 `[DONE]` 断流、只有 `finish_reason` 的网关、`applyEvent` 归约 + `buildReplyView` 投影、切回 Anthropic 协议路径回归、`/v1/tools/tts` 不叠 `/v1`
+      - 跑法：`node --experimental-transform-types scripts/openai-stream.test.mjs`（`ApiError` 用了参数属性，strip-only 模式会拒；`--experimental-transform-types` 需要）
+      - 浏览器端到端：`node scripts/stub-gateway.mjs 8799` + `pnpm dev`，设置里写入 OpenAI 协议端点后发消息，thinking 步骤与正文正常渲染、无报错
 
 **边界**：不要动 `src/components/**`、不要动 `endpoint.ts` 的导出签名。
 
