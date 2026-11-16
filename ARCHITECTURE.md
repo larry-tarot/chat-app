@@ -269,6 +269,8 @@ gw.example.com:abc / https://      → null                        正确拒绝
 
 **因此顺序不可颠倒**：先启用 Pages（`POST /repos/{owner}/{repo}/pages -f build_type=workflow` 或 Settings → Pages → GitHub Actions），再 push。反过来做，你会白得一次红色的 X，且失败原因和代码毫无关系。
 
+**署名（commit 作者）只能 push 之前定**：历史里 18 个 commit 的作者分布是 `架构师×10 / coder×5 / Yifu×4`，邮箱均为 `*.local` 或 GitHub `noreply`（无真实邮箱进历史）。若要改署名，必须在 `git push` 之前重写历史；push 之后就得对公开仓库 force-push，代价与风险完全不同级。**架构师建议不改**：作者 `Yifu` 就是用户本人，不存在对第三方的归属损害；重写会让 18 个 commit 哈希全变、并作废「哪个产物对应哪个提交」的档案。若真正在意「AI 产出的代码挂在我名下」，正确做法是前向声明（README 一句 AI 协助说明，或此后用 `Co-authored-by` trailer），而不是倒着重写。
+
 **我没有替用户执行的两步，以及为什么**：
 
 1. **把仓库转 public** —— 账号级、对外可见、基本不可逆的动作，不是技术默认值，必须用户点头（免费账号的 Pages 只对 public 仓库开放）。
