@@ -51,9 +51,10 @@ This fork makes the **API address a runtime setting** instead of a build-time co
 | Conversation title | ✅ server-provided | ✅ local fallback from the first prompt |
 | Token usage | ✅ | ⚠️ only with `stream_options` support |
 
-Before pointing it at your own gateway:
+### CORS: nothing to configure for the default endpoint
 
-1. **Allow CORS**, otherwise the UI only says "connection failed":
+- With the default `https://api.deepseek.com` **no CORS setup is needed**: the endpoint echoes any request origin back (including `https://*.github.io`, `http://localhost:*`, and `null` when opening the file directly) and allows `x-api-key` / `anthropic-beta`.
+- **Only a self-hosted gateway needs the headers below**; without them the UI just says "connection failed":
 
 ```text
 Access-Control-Allow-Origin: <your page origin, or *>

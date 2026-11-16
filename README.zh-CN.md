@@ -51,9 +51,10 @@ pnpm build
 | 会话标题 | ✅ 服务端下发 | ✅ 用首条提问本地截断兜底 |
 | token 用量 | ✅ | ⚠️ 网关支持 `stream_options` 才有 |
 
-### 接自建网关前必须确认
+### CORS：默认地址不用配，自建网关必须配
 
-1. **放行 CORS**。不放行时界面只会提示「连接失败」，看不出是跨域问题：
+- **用默认的 `https://api.deepseek.com` 时无需任何 CORS 配置**：实测该接口对任意请求来源都原样回显（含 `https://*.github.io`、`http://localhost:*`、以及 `file://` 双击时的 `null`），且允许 `x-api-key` / `anthropic-beta` 头。
+- **只有填自建网关或中转站时才需要下面这些头**，不放行时界面只提示「连接失败」，看不出是跨域问题：
 
 ```text
 Access-Control-Allow-Origin: <你的页面 origin，或 *>

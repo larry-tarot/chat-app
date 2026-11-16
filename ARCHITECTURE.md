@@ -277,3 +277,30 @@ gw.example.com:abc / https://      → null                        正确拒绝
 2. **`git push` 到用户账号** —— 一次对外写入，同样需要授权。
 
 **合规项（本轮补）**：`LICENSE` 是 `Copyright (c) 2026 DeepSeek`，我们是 MIT fork。转为 public 后，README 开头必须声明 fork 关系并保留版权与许可证文本——两个 README 已补，且这是纯文档改动，`release.sh` 复跑确认清单哈希未变（`ec9782af`）。
+
+## 11. v0.5.1 待办清单（发布后第一批，一次重出、一次重验）
+
+这一批不夹带功能，只修「文案与错误指向」这一类问题。*来源：发布前最后两轮的评审，均已由架构师独立复验。*
+
+| # | 问题 | 归属 | 改法 | 可执行验收 |
+|---|---|---|---|---|
+| ① | 端点地址带凭据（`https://user:token@host`）被静默丢弃 | L2 `useEndpointForm` | 保存前判 authority 含 `@`，就地拒绝并说明「网关鉴权请用 API Key」，不落库 | 保存后 `localStorage` 不得出现该键；提示文案命中 |
+| ② | `network` 文案在全仓 3 个副本，同一原因两个结论 | **L5 规则 + L2/L3 各 1 行** | `services/settings.ts` 增加 `networkFailureKey()`，`describe.ts` / `apiFailure.ts` 只读键不判 source | `grep -rn networkFailureKey src/` 判定点 = 1；L2/L3 不再出现 `source === 'override'` |
+| ③ | 网关返回网页时，气泡把整段 HTML 当错误文案 | L4 `readErrorResponse` | 响应体是 HTML 或超长非 JSON → 抛「端点返回的是网页而不是 API 响应，多半地址少了路径，或被登录页/防火墙拦截」 | 探针脚本：两协议各返回 `200 text/html`，断言 `kind==='protocol'` 且 message 不含 `<` |
+| ④ | `file://` 下 `null` 源与 `github.io` 源的官方端点可用性 | —（已实测） | 无需改动 | OPTIONS 预检 `ACAO` 回显，见下 |
+
+**实测依据（架构师独立复跑，2026-11-16）**：
+
+```
+OPTIONS https://api.deepseek.com/anthropic/v1/messages
+  Origin: https://larry-tarot.github.io → 200 · ACAO 回显该源 · allow-headers: content-type,x-api-key,anthropic-version
+  Origin: null（file:// 双击）           → 200 · ACAO: null · allow-credentials: true
+```
+
+结论：**默认端点不需要任何 CORS 配置**，三种发布形态直连官方接口都成立；README 已按事实改写（原先像在暗示官方也要配）。
+
+**明确不做的两件**（记入已知限制，不再评估）：
+1. 用户把自建地址填成与默认完全相同的 host 时，`source` 仍为 `override`，断网会提示「检查网关 CORS」——技术上不算错，加一个 host 常量比较不值；
+2. 历史 commit 署名不改（见 §10.8）。
+
+**批次纪律**：一次改完 → `sh scripts/release.sh` 一次重出 → 三处期望值同改 → `grep -rn` 不得残留旧哈希 → 再跑一遍确认哈希稳定。
