@@ -71,8 +71,8 @@ pnpm install && pnpm build
 sh scripts/release.sh        # build + zip + print the manifest hash
 ```
 
-Current source baseline manifest hash: `419032ecac2516ad8900cbc9234559be1027d053220ddb9cbed99751cfe01d63`
-(153 files / 4,409,126 bytes / 89 js). A different hash means source or dependency versions changed — do not ship an old archive as new.
+Current source baseline manifest hash: `ec9782af38e284d6fc9260735fb3e63c2b069d060f50a0ed3e3b2362aaa3f3a1`
+(153 files / 4,409,186 bytes / 89 js). A different hash means source or dependency versions changed — do not ship an old archive as new.
 
 Static hosting only needs the contents of `dist/`; both a site root and a subpath (`/my-org/chat-demo/`) are verified. `deploy/nginx.conf` is a ready-to-copy config — the two rules that matter are `Cache-Control: no-cache` for `index.html` and `immutable` for the content-hashed `static/**`. Leaving `index.html` cached gives users an old shell with new chunks (blank page).
 
