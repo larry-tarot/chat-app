@@ -147,7 +147,7 @@ L2/L5（@小码 `dc9ba60`）、L4（@coder `8962cd4`）、L3 兜底（@架构师
 |---|---|---|
 | 类型 / 静态检查 | `pnpm type` / `pnpm lint` | 0 error / 0 warning（124 files） |
 | 产物 | `pnpm build` | 303ms / 4.5MB / 89 js（1 main + 88 async） |
-| 四份脚本验收 | `node --experimental-transform-types scripts/{endpoint,openai-stream,settings-provider,title}.test.mjs` | 4/4 PASS |
+| 四份脚本验收 | `node --experimental-transform-types scripts/{endpoint,openai-stream,settings-provider,title}.test.mjs` | 4/4 PASS，断言数 **12 / 47 / 16 / 11**（openai 从 40 加到 47，见 §10）|
 | UI 全链路（人点） | 设置→服务商→选 OpenAI→填 `http://localhost:8799/`→保存 | 显示「已保存，连接正常」，存储落 `http://localhost:8799`（尾斜杠被规范化去掉） |
 | 请求真的换了地址 | stub 网关 `GET /__log` | `GET /v1/models`（校验）+ `POST /v1/chat/completions`（256B） |
 | 能力置灰 | DOM 检查 | 附件/语音/搜索 `disabled=true`，tooltip「当前服务商不支持…」 |
@@ -157,3 +157,31 @@ L2/L5（@小码 `dc9ba60`）、L4（@coder `8962cd4`）、L3 兜底（@架构师
 | gh-pages 子路径 | 把 `dist/` 放进 `/my-org/chat-demo/` 静态服务 | main + `async/535`、`async/3806`、`async/4959`（含 css）全 200，UI 正常挂载 |
 
 **仍未做（有意为之，不属于本轮）**：CI 流水线、README 面向使用者的改写、UI 交互的自动化回归（目前 UI 层靠人点 + 纯函数脚本）。
+
+## 10. 发布前裁决与 v0.6 契约预案
+
+### 10.1 裁决：接受 `9ada723`（stream_options 退化重发）
+
+理由不是「它通过了自己写的测试」，而是**故障形态足够恶劣**：老网关把 `stream_options` 当未知字段返回 400 时，症状是「OpenAI 协议下整条消息发不出去，Anthropic 协议一切正常」，用户必然先怀疑 CORS，排查成本极高、复现条件又苛刻（要碰巧接的是旧版 vLLM/one-api）。
+
+代码复核（我自己读的，不是听汇报）：
+
+- 判定条件窄：`ApiError && status === 400 && /stream_options|include_usage|unknown (field|parameter)|unrecogni[sz]ed/i.test(message)`；模型名不存在之类的 400 **不重试**（有断言）。
+- 只重发一次，且发生在出帧之前 → 不可能产生重复内容。
+- 退化后本轮如实无 usage，不编造 token 数。
+
+代价（接受）：多一条隐式重试路径；README 必须写明「无 usage 是预期」。
+
+### 10.2 裁决：`endpoint.ts` 继续冻结到 v0.5 发布结束
+
+`@coder` 提的 `provider → { chatPath, modelsPath, filesPath?, supportsUsage, supportsSpeech, supportsFiles, supportsSearch }` 方向正确，`@小码` 也确认 L2 只有一处判能力入口（`services/settings.ts::isAnthropicProtocol()`，四个置灰入口全消费它，无散落 if）。**但现在不动**：发布在即，冻结契约换形状会把「已验证的 v0.5」变成「未验证的 v0.5.1」。
+
+**v0.6 开工第一件事**就是这次升级，形状按上表；届时 `apiBase()` 退化为读取器，`isAnthropicProtocol()` 改成读能力位，L2 四个调用点一行不改。加 Ollama（`/api/chat`、无 `stream_options`、无 files）就是往表里加一行，而不是加第三个分支。
+
+### 10.3 发布形态（三条产物，都已本地验过）
+
+| 形态 | 怎么产出 | 验证状态 |
+|---|---|---|
+| 静态站点（gh-pages/任意静态机） | `pnpm build` → `dist/` | 子路径 `/my-org/chat-demo/` 下 main + 3 个 async chunk 全 200 ✅ |
+| 离线包（双击即用） | `dist/` 打 zip | 解压后 `index.html` 发真消息走通 ✅ |
+| 源码开发 | `pnpm dev` | 8090 ✅ |

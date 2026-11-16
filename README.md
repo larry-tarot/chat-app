@@ -27,6 +27,40 @@ pnpm build
 
 The output is written to `dist/`. Deploy it to a static web server or open `dist/index.html` directly. Opening the file directly requires browser support for storage on `file://` pages and an API service that permits their cross-origin requests.
 
+## Provider & endpoint
+
+This fork makes the **API address a runtime setting** instead of a build-time constant: point it at your own gateway or relay without rebuilding.
+
+- Settings → Provider: pick a protocol (`Anthropic compatible` / `OpenAI compatible`) and enter the endpoint. A missing scheme gets `https://`, trailing slashes and query strings are normalized away. "Save" probes `/models` with the current key; a failed probe keeps the configuration and explains why (CORS not allowed / invalid key / gateway error).
+- The API key lives in Settings → **Data** (the Provider section has a "Configure now" shortcut).
+- "Reset" restores the build-time default (`https://api.deepseek.com`).
+
+| Capability | Anthropic compatible | OpenAI compatible |
+|---|---|---|
+| Streaming chat | ✅ | ✅ |
+| Deep thinking | ✅ | ⚠️ only if the gateway sends `reasoning_content` |
+| Web search / link reading / citations | ✅ | ❌ disabled |
+| Attachments and images | ✅ | ❌ disabled |
+| Voice input / read aloud | ✅ | ❌ disabled |
+| Conversation title | ✅ server-provided | ✅ local fallback from the first prompt |
+| Token usage | ✅ | ⚠️ only with `stream_options` support |
+
+Before pointing it at your own gateway:
+
+1. **Allow CORS**, otherwise the UI only says "connection failed":
+
+```text
+Access-Control-Allow-Origin: <your page origin, or *>
+Access-Control-Allow-Headers: Authorization, Content-Type, x-api-key, anthropic-beta
+Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
+```
+
+`OPTIONS` preflight must return 204. Opening `index.html` from disk sends `origin: null`, which the gateway must accept.
+
+2. **Match the protocol.** Anthropic compatible endpoints need `POST /anthropic/v1/messages` (SSE), `GET /models`, `POST /anthropic/v1/files`; OpenAI compatible endpoints need `POST /v1/chat/completions` (`stream: true`) and `GET /v1/models`.
+
+3. **Older gateways may reject `stream_options`.** If a gateway answers 400 for that field, the client retries once without `include_usage`. **No token usage for that turn is expected, not a bug.**
+
 ## Features
 
 - Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.

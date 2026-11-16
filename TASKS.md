@@ -11,9 +11,9 @@
 | 线 | commit | 状态 | 关键验收 |
 |---|---|---|---|
 | P0 仓库 + 契约 | `b92deea` | ✅ | endpoint.test 12 PASS / build 269ms |
-| L4 协议层 | `fbe2e0f` `8962cd4` | ✅ | openai-stream.test 36+ PASS / `/v1/tools` 404→protocol |
-| L2/L5 设置 UI | `dc9ba60` | ✅ | settings-provider.test PASS / DOM 置灰 + 刷新保持 |
-| L3 标题兜底 | `647aa33` | ✅ | title.test 12 PASS / 刷新后仍在 |
+| L4 协议层 | `fbe2e0f` `8962cd4` `9ada723` | ✅ | openai-stream.test **47** PASS / `/v1/tools` 404→protocol / `stream_options` 退化重发 |
+| L2/L5 设置 UI | `dc9ba60` `96dc69d` | ✅ | settings-provider **16** PASS / DOM 置灰 + 刷新保持 / Key 位置入口 |
+| L3 标题兜底 | `647aa33` | ✅ | title.test 11 项 PASS / 刷新后仍在 |
 | P2 产物验收 | 本文档 §9 | ✅ | file:// 全链路、子路径 200、UI 人点一遍 |
 
 **剩余全部是「已在 ARCHITECTURE §9 列明、但有意不做」的项**：CI、README 改写、UI 自动化回归。

@@ -27,6 +27,40 @@ pnpm build
 
 产物位于 `dist/`，可部署到静态服务器，也可直接打开 `dist/index.html`。直接打开时，浏览器和 API 服务需允许 `file://` 页面的存储与跨域请求。
 
+## 服务商与端点
+
+本 fork 把 **API 地址从构建期常量改成了运行时配置**：不重新构建也能指向自建网关或中转站。
+
+- 设置 → 服务商：选择协议（`Anthropic 兼容` / `OpenAI 兼容`）并填写端点地址。地址不写协议时自动补 `https://`，尾斜杠与查询串会被规范化去掉；点「保存」会立刻用当前 API Key 探一次 `/models`，成功显示「已保存，连接正常」，失败也会**保留配置**并说明原因（未放行 CORS / Key 无效 / 网关报错）。
+- API Key 在 设置 → **数据管理** 里填写；服务商分区底部有「前往配置」按钮可直达。
+- 「恢复默认」回到构建期注入的地址（默认 `https://api.deepseek.com`）。
+
+| 能力 | Anthropic 兼容 | OpenAI 兼容 |
+|---|---|---|
+| 文本流式对话 | ✅ | ✅ |
+| 深度思考 | ✅ | ⚠️ 取决于网关是否下发 `reasoning_content` |
+| 联网搜索 / 读链接 / 引用 | ✅ | ❌ 入口置灰 |
+| 附件与图片 | ✅ | ❌ 入口置灰 |
+| 语音输入 / 朗读 | ✅ | ❌ 入口置灰 |
+| 会话标题 | ✅ 服务端下发 | ✅ 用首条提问本地截断兜底 |
+| token 用量 | ✅ | ⚠️ 网关支持 `stream_options` 才有 |
+
+### 接自建网关前必须确认
+
+1. **放行 CORS**。不放行时界面只会提示「连接失败」，看不出是跨域问题：
+
+```text
+Access-Control-Allow-Origin: <你的页面 origin，或 *>
+Access-Control-Allow-Headers: Authorization, Content-Type, x-api-key, anthropic-beta
+Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
+```
+
+`OPTIONS` 预检需返回 204。直接双击 `index.html` 打开时页面 origin 是 `null`，网关必须能接受它。
+
+2. **协议对齐**。Anthropic 兼容端点需实现 `POST /anthropic/v1/messages`（SSE）、`GET /models`、`POST /anthropic/v1/files`；OpenAI 兼容端点需实现 `POST /v1/chat/completions`（`stream: true`）与 `GET /v1/models`。
+
+3. **部分老网关不认 `stream_options`**。若网关以「未知字段」为由返回 400，本客户端会自动去掉 `include_usage` 重发一次。此时该轮**不显示 token 用量属于预期行为，不是故障**。
+
 ## 功能
 
 - 多会话、自动标题、重命名与删除；编辑提问、重新生成和切换消息分支。
@@ -53,9 +87,9 @@ API Key 和设置保存在浏览器 localStorage，会话及附件原件保存�
 | `pnpm lint`   | oxlint 检查         |
 | `pnpm format` | oxfmt 格式化        |
 
-[rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`。`createConfig({ apiOrigin, devServer })` 支持自定义 API 地址和开发服务器代理。
+[rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`，该值现在只作为**运行时配置的默认值**（设置面板可覆盖，见上文「服务商与端点」）。`createConfig({ apiOrigin, devServer })` 支持在构建期改默认地址和开发服务器代理。
 
-聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；语音使用 ASR / TTS 接口。请求使用搜索、链接阅读、标题和 `latest_reminder` 等扩展，接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
+聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；切到 OpenAI 兼容协议时改走 `/v1/chat/completions`（能力差异见上表）。语音使用 ASR / TTS 接口。请求使用搜索、链接阅读、标题和 `latest_reminder` 等扩展，接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
 
 ```text
 src/
