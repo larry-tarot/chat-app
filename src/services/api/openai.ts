@@ -102,11 +102,16 @@ export const toOpenAiMessages = (body: CreateMessageRequest): OpenAiMessage[] =>
 }
 
 /** 请求体：thinking / safety_check / tools / title 在此丢弃（协议不支持，发出去会被 400） */
-export const toOpenAiBody = (body: CreateMessageRequest, model: string = body.model) => ({
+export const toOpenAiBody = (
+  body: CreateMessageRequest,
+  model: string = body.model,
+  includeUsage = true
+) => ({
   model,
   messages: toOpenAiMessages(body),
   stream: true,
-  stream_options: { include_usage: true },
+  // 拿 token 统计的唯一途径；被网关拒绝时由调用方退化重发（见 streamOpenAiChat）
+  ...(includeUsage ? { stream_options: { include_usage: true } } : {}),
 })
 
 const toUsage = (usage: OpenAiUsage | undefined): MessageUsage | undefined => {
@@ -141,6 +146,12 @@ const toStopReason = (reason: string | null | undefined): StopReason => {
   }
 }
 
+/** 网关以「未知字段」为由拒绝 stream_options 时的判定：只认 400 + 文案指向该字段，不误伤其它 400 */
+const STREAM_OPTIONS_REJECTED = /stream_options|include_usage|unknown (?:field|parameter)|unrecogni[sz]ed/i
+
+const isStreamOptionsRejected = (error: unknown): boolean =>
+  error instanceof ApiError && error.status === 400 && STREAM_OPTIONS_REJECTED.test(error.message)
+
 const readChunk = (value: unknown): OpenAiChunk | null => {
   if (!isRecord(value)) {
     return null
@@ -155,6 +166,11 @@ const readChunk = (value: unknown): OpenAiChunk | null => {
  * POST {baseUrl}/v1/chat/completions（stream: true），逐条产出翻译后的事件。
  * 与 client.ts 的 streamMessage 保持同构：正常结束一定以 message_stop 收尾；
  * 未收到 [DONE] 或 finish_reason 就断流，抛 interrupted，交给上层按断流处理。
+ *
+ * 兼容退化：`stream_options.include_usage` 是拿 token 统计的唯一途径，但旧版 vLLM /
+ * one-api 之类的网关会把它当未知字段直接 400——症状是「OpenAI 协议下整条消息发不出去，
+ * Anthropic 协议却正常」，极易被误判成 CORS。这里对「400 且文案指向该字段」做一次无
+ * usage 重发：请求在出帧前就失败了，重试不会重复内容，代价只是丢本轮 token 统计。
  */
 export async function* streamOpenAiChat(
   config: EndpointConfig,
@@ -162,16 +178,28 @@ export async function* streamOpenAiChat(
   body: CreateMessageRequest,
   signal: AbortSignal
 ): AsyncGenerator<MessageStreamEvent> {
-  const response = await request(`${apiBase(config)}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
-    body: JSON.stringify(toOpenAiBody(body)),
-    signal,
-  })
+  const url = `${apiBase(config)}/chat/completions`
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+  }
+  const post = (includeUsage: boolean) =>
+    request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(toOpenAiBody(body, body.model, includeUsage)),
+      signal,
+    })
+  let response: Response
+  try {
+    response = await post(true)
+  } catch (error) {
+    if (!isStreamOptionsRejected(error)) {
+      throw error
+    }
+    response = await post(false)
+  }
   const contentType = response.headers.get('Content-Type') ?? ''
   if (!response.body || !contentType.includes('text/event-stream')) {
     throw await readErrorResponse(response, 'protocol', '')

@@ -91,6 +91,13 @@ const server = createServer((req, res) => {
       sseOpen(res)
       return res.end(frame({ error: { message: 'quota exceeded' } }))
     }
+    // 老网关把 stream_options 当未知字段：带该字段就 400，不带就正常出流
+    if (scenario === 'reject-stream-options' && body?.stream_options) {
+      return json(res, 400, { error: { message: 'Unknown field: stream_options', type: 'invalid_request_error' } })
+    }
+    if (scenario === 'model-400') {
+      return json(res, 400, { error: { message: 'model deepseek-flash not found' } })
+    }
     if (scenario === 'not-sse') {
       return json(res, 200, { ok: true })
     }
@@ -117,7 +124,8 @@ const server = createServer((req, res) => {
       return res.end()
     }
     sseOpen(res)
-    for (const payload of normalFrames) {
+    // 和真网关一致：没要求 include_usage 就不下发 usage chunk
+    for (const payload of body?.stream_options ? normalFrames : normalFrames.filter((chunk) => !chunk.usage)) {
       res.write(frame(payload))
     }
     res.write(frame('[DONE]'))
@@ -307,6 +315,27 @@ scenario = 'finish-only'
 const finishOnly = await collect(streamMessage('test-key', requestBody, signal()))
 eq('只有 finish_reason 没有 [DONE] 也算正常结束', finishOnly.at(-1), { type: 'message_stop' })
 eq('finish_reason=length → max_tokens（可续写）', finishOnly.find((event) => event.type === 'message_delta').delta.stop_reason, 'max_tokens')
+
+// ---------- 6.5 stream_options 兼容退化 ----------
+scenario = 'reject-stream-options'
+requests.length = 0
+const degraded = await collect(streamMessage('test-key', requestBody, signal()))
+const chatCalls = requests.filter((entry) => entry.url === '/v1/chat/completions')
+eq('老网关拒绝 stream_options 时自动重发一次', chatCalls.length, 2)
+ok('第一次带 stream_options', Boolean(chatCalls[0]?.body?.stream_options))
+ok('第二次不带 stream_options', chatCalls[1]?.body && !('stream_options' in chatCalls[1].body))
+eq(
+  '退化后正文照旧流式到达',
+  degraded.filter((event) => event.type === 'content_block_delta' && event.delta.type === 'text_delta').map((event) => event.delta.text).join(''),
+  '你好，世界'
+)
+ok('退化后没有 usage（如实为空，不编造）', degraded.find((event) => event.type === 'message_delta')?.usage === undefined)
+
+scenario = 'model-400'
+requests.length = 0
+const modelError = await collectUntilThrow(streamMessage('test-key', requestBody, signal()))
+ok('其它 400（模型名不存在）不重试，原样抛 http', modelError.error instanceof ApiError && modelError.error.kind === 'http' && modelError.error.status === 400, String(modelError.error))
+eq('其它 400 只发一次请求', requests.filter((entry) => entry.url === '/v1/chat/completions').length, 1)
 
 // ---------- 7. 两种协议互不污染 ----------
 scenario = 'normal'
