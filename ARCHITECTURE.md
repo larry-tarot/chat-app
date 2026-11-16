@@ -287,7 +287,8 @@ gw.example.com:abc / https://      → null                        正确拒绝
 | ① | **地址可能指向与肉眼不同的主机**（`https://***@evil.example.com` → 存成 `https://evil.example.com`，用户以为配的是 `gw`） | L2 `useEndpointForm`：**`commitBaseUrl()` + `save()` 两处** | 判定只看**原始草稿**的 authority 是否含 `@`；命中就报错、不改写、不规范化、不落库 | **必须从输入框草稿进：粘贴 `https://user:token@gw…` → 失焦 → 草稿原样保留且报错**；只测「粘贴 → 保存」会漏 |
 | ② | `network` 文案在全仓 3 个副本，同一原因两个结论 | **L5 规则 + L2/L3 各 1 行** | `services/settings.ts` 增加 `networkFailureKey()`，`describe.ts` / `apiFailure.ts` 只读键不判 source | `grep -rn networkFailureKey src/` 判定点 = 1；L2/L3 不再出现 `source === 'override'` |
 | ③ | 网关返回网页时，气泡把整段 HTML 当错误文案 | L4 `readErrorResponse` | 响应体是 HTML 或超长非 JSON → 抛「端点返回的是网页而不是 API 响应，多半地址少了路径，或被登录页/防火墙拦截」 | 探针脚本：两协议各返回 `200 text/html`，断言 `kind==='protocol'` 且 message 不含 `<` |
-| ④ | `file://` 下 `null` 源与 `github.io` 源的官方端点可用性 | —（已实测） | 无需改动 | OPTIONS 预检 `ACAO` 回显，见下 |
+| ④ | **https 页面保存 http 内网端点，界面确认了一次永远不可能工作的配置**（浏览器混合内容策略必拦） | L2 `useEndpointForm`（新增纯判定 `blockedByMixedContent`） | `location.protocol==='https:'` 且端点 `http://` 且 host ∉ {localhost, 127.0.0.1, [::1]} → 拒绝并说明「https 页面无法访问 http 端点，请改用 https 或本机反向代理」，**不落库** | 三向验收：① https + `http://192.168.1.10:8080` → 拒绝 ② https + `http://localhost:8799` → 放行 ③ `http://localhost:8090`（dev，页面本身 http）→ 放行 |
+| ⑤ | 官方端点可用性 | —（已实测） | 无需改动 | OPTIONS 预检 `ACAO` 回显，`null` 源同样放行 |
 
 **实测依据（架构师独立复跑，2026-11-16）**：
 
@@ -359,3 +360,18 @@ CI          gh run list → success @ 25ba6cd（唯一一次运行）
 **真实 API Key + 官方端点的完整对话**。预检（CORS 回显任意源，含 `null`）已实测，但 `200 + 真回答` 这一段必须有 Key 才能跑。这不是可以代理完成的验证——留作用户上线后的第一次真实验收。
 
 v0.5.1 三项（`§11`）不受发布影响，按原批次推进：一次改完 → 一次重出 → 三处哈希同改 → 复跑。
+
+### 12.4 ④ 的现场证据（架构师在线上站点复现，非转述）
+
+```
+页面 location.protocol = https:
+输入 http://192.168.1.10:8080 → 保存
+  localStorage.endpoint-base-url = "http://192.168.1.10:8080"
+  状态行 = "Saved. Connectivity is checked once an API Key is added."
+```
+
+界面**确认了一次永远不可能成功的保存**：该页面上任何发往此地址的请求都会被浏览器混合内容策略丢弃，连页面自己都发不出去。有 Key 时更糟——探针失败会落到「请确认网关已放行 CORS」，把真因（混合内容）指成 CORS。
+
+这与 ① 、② 是同一类：**界面在陈述一件它没有、也无法验证的事**。处理同 ②：判定放在保存前、不落库、给出可执行的原因。判定不需要发请求，只看页面自身协议与端点协议，因此零网络成本、零误报风险（必须带三条放行用例，dev 跑在 `http://localhost:8090` 时不能误伤）。
+
+**两层都要**：README 已写明「自定义端点必须 https，仅 localhost/127.0.0.1 放行」——那是给「还没开始配的人」；④ 是给「正在配的人」。同「置灰 + 404 映射」的逻辑：文档与代码各挡一半，不互相替代。
