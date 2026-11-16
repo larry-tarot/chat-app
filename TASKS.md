@@ -29,6 +29,10 @@
       - 覆盖：请求体转换、帧→事件骨架、usage 后置 chunk、7 字节切片（切点落在中文 UTF-8 中间）、`error` 帧、200 非 SSE、无 `[DONE]` 断流、只有 `finish_reason` 的网关、`applyEvent` 归约 + `buildReplyView` 投影、切回 Anthropic 协议路径回归、`/v1/tools/tts` 不叠 `/v1`
       - 跑法：`node --experimental-transform-types scripts/openai-stream.test.mjs`（`ApiError` 用了参数属性，strip-only 模式会拒；`--experimental-transform-types` 需要）
       - 浏览器端到端：`node scripts/stub-gateway.mjs 8799` + `pnpm dev`，设置里写入 OpenAI 协议端点后发消息，thinking 步骤与正文正常渲染、无报错
+- [x] `/v1/tools/*` 的 404/405 → `ApiError('protocol')` + 可操作文案（ARCHITECTURE §7 裁决 2 的 L4 部分，`8962cd4`）
+      - `speech.ts` 抽 `toolsRequest()`：只重分类 404/405；500 等仍走 `http` 分类透传服务端原文（有回归断言）
+      - 真链路验证：Anthropic 协议 + 无 `/v1/tools` 的网关点「朗读」→ UI 弹出「当前服务商没有开放语音接口（/v1/tools），请切回 Anthropic 兼容协议后再试。」
+      - 注：API Key 输入框在设置「**数据管理**」分区（`SettingsDialog.tsx:115`），不在「通用设置」；首次配服务商的人容易找错
 
 **边界**：不要动 `src/components/**`、不要动 `endpoint.ts` 的导出签名。
 
