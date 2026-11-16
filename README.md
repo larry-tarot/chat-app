@@ -64,7 +64,10 @@ Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 
 `OPTIONS` preflight must return 204. Opening `index.html` from disk sends `origin: null`, which the gateway must accept.
 
-2. **A custom endpoint must be `https://`.** In an https page only `http://localhost` and `http://127.0.0.1` are allowed; any other `http://` address is blocked as **mixed content** — and the symptom is easy to misread: the endpoint saves fine but sending does nothing (look for `Mixed Content` in the console).
+2. **Prefer `https://` for a custom endpoint.** With plain `http://` the outcome depends on the browser and the target (Chrome logs a `Mixed Content` warning either way):
+   - `http://localhost`, `http://127.0.0.1`, and **private network addresses** (10./172.16-31./192.168.): the request **does go through** and works;
+   - **public `http://`**: blocked by the mixed-content policy — the endpoint saves fine but sending does nothing.
+   Safari/Firefox were not measured per case and may be stricter; a local reverse proxy to https is still the safer choice for intranet gateways.
 3. **Match the protocol.** Anthropic compatible endpoints need `POST /anthropic/v1/messages` (SSE), `GET /models`, `POST /anthropic/v1/files`; OpenAI compatible endpoints need `POST /v1/chat/completions` (`stream: true`) and `GET /v1/models`.
 
 4. **Older gateways may reject `stream_options`.** If a gateway answers 400 for that field, the client retries once without `include_usage`. **No token usage for that turn is expected, not a bug.**

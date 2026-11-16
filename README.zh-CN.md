@@ -64,7 +64,10 @@ Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 
 `OPTIONS` 预检需返回 204。直接双击 `index.html` 打开时页面 origin 是 `null`，网关必须能接受它。
 
-2. **自定义端点必须是 `https://`**。https 页面里只有 `http://localhost` 与 `http://127.0.0.1` 会被浏览器放行，其余 `http://` 地址会被**混合内容**拦截——症状很容易误判：端点保存能过、发消息却毫无反应（控制台里是 `Mixed Content` 报错）。
+2. **自定义端点请优先用 `https://`**。若用 `http://`，结果取决于浏览器与目标地址（Chrome 实测，控制台会打 `Mixed Content` 警告）：
+   - `http://localhost`、`http://127.0.0.1`、**内网地址（10./172.16-31./192.168. 等）**：请求**能发出**，可用；
+   - **公网 `http://`**：会被混合内容策略**拦截**，症状是「端点保存能过、发消息毫无反应」。
+   Safari/Firefox 未逐项实测，行为可能更严格，内网场景也建议做本机反向代理转成 https。
 3. **协议对齐**。Anthropic 兼容端点需实现 `POST /anthropic/v1/messages`（SSE）、`GET /models`、`POST /anthropic/v1/files`；OpenAI 兼容端点需实现 `POST /v1/chat/completions`（`stream: true`）与 `GET /v1/models`。
 
 4. **部分老网关不认 `stream_options`**。若网关以「未知字段」为由返回 400，本客户端会自动去掉 `include_usage` 重发一次。此时该轮**不显示 token 用量属于预期行为，不是故障**。

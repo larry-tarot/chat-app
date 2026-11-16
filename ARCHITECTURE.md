@@ -287,7 +287,7 @@ gw.example.com:abc / https://      → null                        正确拒绝
 | ① | **地址可能指向与肉眼不同的主机**（`https://***@evil.example.com` → 存成 `https://evil.example.com`，用户以为配的是 `gw`） | L2 `useEndpointForm`：**`commitBaseUrl()` + `save()` 两处** | 判定只看**原始草稿**的 authority 是否含 `@`；命中就报错、不改写、不规范化、不落库 | **必须从输入框草稿进：粘贴 `https://user:token@gw…` → 失焦 → 草稿原样保留且报错**；只测「粘贴 → 保存」会漏 |
 | ② | `network` 文案在全仓 3 个副本，同一原因两个结论 | **L5 规则 + L2/L3 各 1 行** | `services/settings.ts` 增加 `networkFailureKey()`，`describe.ts` / `apiFailure.ts` 只读键不判 source | `grep -rn networkFailureKey src/` 判定点 = 1；L2/L3 不再出现 `source === 'override'` |
 | ③ | 网关返回网页时，气泡把整段 HTML 当错误文案 | L4 `readErrorResponse` | 响应体是 HTML 或超长非 JSON → 抛「端点返回的是网页而不是 API 响应，多半地址少了路径，或被登录页/防火墙拦截」 | 探针脚本：两协议各返回 `200 text/html`，断言 `kind==='protocol'` 且 message 不含 `<` |
-| ④ | **https 页面保存 http 内网端点，界面确认了一次很可能立即失败的配置** | L2 `useEndpointForm` | `location.protocol==='https:'` 且端点 `http://` 且 host 非可信本地源 → **软警告**（可继续保存）+ 一句可执行解释；**不做硬拦截**（理由见 §13.2） | B 级手点（普通浏览器）：警告出现、可选继续、继续后真实行为与提示一致；三向用例见 §13.2 |
+| ④ | https 页面配 `http://` 端点：**公网会被拦、内网可通**，而界面两种都说「已保存」 | L2 `useEndpointForm` | 只在**公网 http** 时给提示（「公网 http 会被混合内容拦截，请改用 https」）；**内网/loopback 不给警告**——实测可通，警告会是假话 | 三分支：公网 http → 提示；内网 http → 无提示；https → 无提示。依据见 §13.3 |
 | ⑤ | 官方端点可用性 | —（已实测） | 无需改动 | OPTIONS 预检 `ACAO` 回显，`null` 源同样放行 |
 
 **实测依据（架构师独立复跑，2026-11-16）**：
@@ -411,3 +411,24 @@ v0.5.1 三项（`§11`）不受发布影响，按原批次推进：一次改完 
 | **C** | 自动化 headless（本项目默认） | 交互流程、DOM 状态、请求确实发出、文案与布局 | **逐项待定**：CORS ✔（已证强制）、混合内容 ✘（已证放行）——**新策略必须先测这条浏览器守不守，再谈结论** |
 
 **写结论时的强制格式**：`<陈述> [A|B|C]，手段：<命令或操作>`。没有级别的结论一律视为未验证。
+
+### 13.3 混合内容：实测把「一律拦截」推翻了（架构师，独立复现）
+
+上一轮我们依据规范写了「https 页面里只有 localhost 能连 http，其余会被拦」。用**干净启动的 Chrome 157 headless（默认参数，无任何放行开关）** 从线上页面对三个目标发 `fetch(mode:'no-cors')` 隔离策略：
+
+| 目标 | 结果 | 浏览器日志 |
+|---|---|---|
+| `http://127.0.0.1:8804`（loopback） | **不拦**，`type=opaque` | Mixed Content 警告 |
+| `http://10.107.7.233:8804`（**内网 LAN**） | **不拦**，`type=opaque`（`mode:'cors'` 时也拿到 200 + body） | Mixed Content 警告 |
+| `http://neverssl.com/`（**公网 http**） | **拦截**，`TypeError: Failed to fetch` | Mixed Content 警告 |
+| `https://example.com`（无 ACAO，对照组） | 拦截（CORS），`TypeError` | CORS 报错 |
+
+结论修正：**Chrome 157 对「https → http 内网/loopback」是放行（仅警告），对「https → http 公网」才拦**。因此：
+
+1. 「https 页面配 http 内网网关永远不可能成功」——**错**（我上一轮就是这么写的，据此把 ④ 定为硬拦截，已改）；
+2. 正确的用户事实是：内网 http 网关**能用**，公网 http 才需要换 https；
+3. ④ 因此从「拦内网 http」改为「只提示公网 http」——**警告必须对应真实会发生的失败**，否则就是 §10.6 那条原则的反面：界面在断言一件不会发生的事。
+
+未测：Safari / Firefox 的逐项行为（Firefox 有 `security.mixed_content.upgrade_display_content` 一类差异），以及 Chrome 未来版本（Local Network Access 权限模型正在演进）。README 已按「Chrome 实测 + 其他浏览器未测」的口径写。
+
+**方法论收益**：这一格如果沿用「规范 + headless 单次观测」，我们会在 README 里长期写着一条错话，并且让 v0.5.1 去做一个基于错前提的拦截。**证据分级不是为了写文档，是为了不在产品里写假话。**
