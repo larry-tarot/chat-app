@@ -114,6 +114,7 @@ export const zh = {
   settingsEndpointInvalid: '端点地址无效，请填写 http(s):// 开头的地址',
   settingsEndpointVerifying: '校验中...',
   settingsEndpointSaved: '已保存，连接正常',
+  settingsEndpointSavedUnverified: '已保存；填入 API Key 后会校验连通性',
   settingsEndpointCheckFailed: '已保存，但校验未通过：{message}',
   settingsEndpointRejected: '该地址拒绝了当前 API Key',
   settingsEndpointUnreachable: '连接失败——请确认网关已放行跨域（CORS）且地址可达',

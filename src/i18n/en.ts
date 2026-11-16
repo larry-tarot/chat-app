@@ -120,6 +120,7 @@ export const en = {
   settingsEndpointInvalid: 'Invalid endpoint URL. Use an http(s):// address.',
   settingsEndpointVerifying: 'Checking...',
   settingsEndpointSaved: 'Saved, connection OK',
+  settingsEndpointSavedUnverified: 'Saved. Connectivity is checked once an API Key is added.',
   settingsEndpointCheckFailed: 'Saved, but the check failed: {message}',
   settingsEndpointRejected: 'This endpoint rejected the current API Key',
   settingsEndpointUnreachable:

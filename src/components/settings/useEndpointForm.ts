@@ -54,8 +54,8 @@ export const useEndpointForm = () => {
     setStatus(null)
     const apiKey = useSettings.getState().apiKey
     if (!apiKey) {
-      // 没有 Key 时无法探测，只提示已保存
-      setStatus({ tone: 'ok', text: t('settingsEndpointSaved') })
+      // 没有 Key 就探不了：只能如实说「存下了、还没验」，不能报「连接正常」
+      setStatus({ tone: 'ok', text: t('settingsEndpointSavedUnverified') })
       return
     }
     setBusy(true)
