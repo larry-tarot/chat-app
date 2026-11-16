@@ -233,3 +233,24 @@ diff -r --brief <解压的 zip> dist   → 0 行差异
 6. `unzip` 到临时目录后 `diff -r` 对比 `dist`，必须 0 行差异。
 
 第 5、6 步是防「文档里写的是包里的数」与「包和 HEAD 不是同一份」这两类事故，任一失败就不发。
+
+### 10.7 已知限制：端点地址里的凭据会被静默丢弃（决定：发布后第一个补丁修）
+
+`@小码` 用纯函数直接验过，我复跑确认（`normalizeBaseUrl`）：
+
+```
+https://user:token@gw.example.com  → https://gw.example.com     凭据消失
+https://user@gw.example.com/v1     → https://gw.example.com/v1   用户名消失，路径保留
+https:///gw.example.com            → https://gw.example.com      自愈（畸形输入不崩，白捡的加固）
+gw.example.com:abc / https://      → null                        正确拒绝
+```
+
+根因不在本轮改造：`endpoint.ts` 从 P0 起就是 `${url.origin}${url.pathname}`，而 URL 规范的 `origin` 本就不含凭据。所以这是**冻结契约里一条没写进注释的隐含行为**。
+
+危害不是崩溃，是**静默丢用户输入**：之后第一次请求会 401 或 CORS 失败，两条文案都把用户引向错误方向，而他真正需要知道的是「你的凭据根本没被发出去」。
+
+**裁决：不在发布前修。** 理由是这条规则适用于所有人：任何源码改动都要重出产物 + 三处哈希同改 + 重验；为一个人为构造的边角（多见于把 token 写进 URL 的文档示例）再转一圈，性价比不对。
+
+**修复方案已定，留给 v0.5.1 第一个 commit**：L2 侧 `useEndpointForm` 在 `saveEndpoint` 前判 authority 是否含 `@`，命中就原地报「地址里不要带用户名/密码，网关鉴权请用 API Key」且不落库。**不动 `endpoint.ts`**——契约冻结期内不改，何况把它改成返回 `null` 会让「等等我配了一个带凭据的地址」变成一句无解释的「地址无效」。
+
+**文档层已先补**（README 中英各一行「暂不支持」），因为 README 不参与打包：改它不改变清单哈希，属于零成本的知情披露。

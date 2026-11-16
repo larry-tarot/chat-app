@@ -34,6 +34,7 @@ This fork makes the **API address a runtime setting** instead of a build-time co
 - Settings → Provider: pick a protocol (`Anthropic compatible` / `OpenAI compatible`) and enter the endpoint. A missing scheme gets `https://`, trailing slashes and query strings are normalized away. "Save" probes `/models` with the current key; a failed probe keeps the configuration and explains why (CORS not allowed / invalid key / gateway error).
 - The API key lives in Settings → **Data** (the Provider section has a "Configure now" shortcut).
 - "Reset" restores the build-time default (`https://api.deepseek.com`).
+- **Do not put credentials in the endpoint URL** (`https://user:token@gw.example.com`). The current version silently drops them and keeps only the host — use the API Key field for gateway auth. Listed as a known limitation; the next patch rejects such input before saving.
 - **Setting the endpoint before the key is fine**: the status line says "Saved. Connectivity is checked once an API Key is added." Without a key no request is made, so it never claims "connection OK". The real probe happens when you add the key — **expected, not an error**.
 
 | Capability | Anthropic compatible | OpenAI compatible |
