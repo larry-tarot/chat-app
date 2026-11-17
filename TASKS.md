@@ -83,3 +83,12 @@
 - [ ] 把 `endpoint.ts` 的 `apiBase` 与实际请求 URL 做一次对照表（防止各家网关前缀差异）
 
 **冲突规避**：三个人的文件集合不重叠。`endpoint.ts` 归我，谁都不许改；`client.ts`/`speech.ts`/`openai.ts` 归 @coder；`settings/**`+`i18n/**` 归 @小码。
+
+
+## 分工（两条线，2026-11-17 定）
+
+**web 线（本仓）**：按文件边界分工，靠「文件集合不重叠 + 契约冻结」避免冲突——`endpoint.ts` 契约与文档/发布归架构师，`services/api/**` 归 @coder，`components/settings/**`+`i18n/**`+`services/settings.ts` 归 @小码。越界先申报，不当场强改。
+
+**APK 线（`~/projects/newapi-android-chat`）**：分工表与逐条缺陷归属见该仓 `TASKS.md` 的「三人协作分工」一节；那条线没有 CI、没有分支保护，因此额外约定**同一时刻只允许一个人改工作树，改完先提交再交接**。
+
+**只有用户能做的四件**：真实 Key 的官方端点对话（web）、release keystore、真实渠道/账号确认、Studio GUI 那一眼。
