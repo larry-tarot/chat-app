@@ -472,3 +472,22 @@ Sign out 后：    Server 输入框仍是 http://10.0.2.2:3001（持久化正常
 原因：`Log.enable` 会**回放打开调试器之前的 console 缓冲**，那些条目属于更早的一次会话。若据此下结论，会凭空造出一个「baseUrl 没持久化」的假 bug，并可能引出一次错误的修复。
 
 规则：**从调试器里读到的一切，先确认时间戳/来源，再当证据**；能同时被 logcat（带时间）、storage 快照、界面状态三方印证的，才升格为结论。这与 §13.1「C 级手段」是同一件事的第二次实例。
+
+### 13.6 对服务端返回格式的假设，必须对着真实版本验一次
+
+APK 白屏的根因是**一行前缀假设**：客户端认定 relay key 必须以 `sk-` 开头，而 new-api `v1.0.0-rc.51` 的 `/api/token/{id}/key` 返回的是 48 位裸 key。于是「key 完全可用」被客户端判死，bootstrap 抛错，首屏空白。
+
+```ts
+// 错误假设（keychain.ts）
+const keyPrefix = 'sk-'
+const looksUsableKey = (key) => typeof key === 'string' && key.startsWith(keyPrefix)
+// 服务端实际返回：{"data":{"key":"4oG2SJS4qlqr…"},"success":true}
+```
+
+判可用性的正确依据是**服务端的状态字段**（`status === 1` 且未过期），不是我们自己脑补的字符串形状。补 `sk-` 再送出去更糟——实测会失败。
+
+**架构师在本轮也犯了一次同类错误**：我断言「登录只认 HTTP 状态、`success:false` 被当成功」，实际 `auth.ts:unwrap()` 早已处理 `body?.success === false`。教训不是"读代码要仔细"，而是：
+
+> **任何关于「服务端会返回什么」的断言，在写进文档或修复方案之前，必须有一次对着真实实例的观测（curl / sqlite / 真实响应体），而不是从客户端代码反推。**
+
+同源的第二个发现：同一设备连登三次，服务端留下三个同名令牌（`android-app-0e7e4f14f8a140ac`，id 2/3/4，sqlite 直读确认）——**失败重试路径每轮 `POST /api/token/` 新建一把**。这类"我们的重试在对方账上留下垃圾"的副作用，只有看真实实例才看得见。
